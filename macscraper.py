@@ -24,12 +24,19 @@ async def alert_sold(titlu, pret_oferta, platforma, pret_intreg="Necunoscut"):
 
 total = 0
 
-def checkDatabase(driver, cursor, platforma, connection, Macbooks):
+'''def checkDatabase(driver, cursor, platforma, connection, Macbooks):
     
     # definire variabile pentru fiecare platforma pentru cod curat
+    # iStyle
+    if platforma == "ISTYLE":
+        by_object_titlu = By.CSS_SELECTOR
+        id_titlu = "div.apl-section-product-title > h1:nth-child(1)"
+
+        by_object_pret = By.CSS_SELECTOR
+        id_pret = "#price-template--16719916499033__main > div:nth-child(2) > div:nth-child(1) > p:nth-child(1) > span:nth-child(1)"
 
     # eMag
-    if platforma == "EMAG":
+    elif platforma == "EMAG":
         by_object_titlu = By.CLASS_NAME
         id_titlu = "card-v2-title"
 
@@ -44,13 +51,6 @@ def checkDatabase(driver, cursor, platforma, connection, Macbooks):
         by_object_pret = By.CSS_SELECTOR
         id_pret = "li.Products-item > div:nth-child(1) > div:nth-child(5) > div:nth-child(1) > div:nth-child(2) > span:nth-child(2) > span:nth-child(1)"
 
-    # iStyle
-    elif platforma == "ISTYLE":
-        by_object_titlu = By.CSS_SELECTOR
-        id_titlu = "div.apl-section-product-title > h1:nth-child(1)"
-
-        by_object_pret = By.CSS_SELECTOR
-        id_pret = "#price-template--16719916499033__main > div:nth-child(2) > div:nth-child(1) > p:nth-child(1) > span:nth-child(1)"
 
     cursor.execute(f"SELECT titlu, pret_oferta, pret_nou FROM macbooks WHERE platforma = ?", (platforma,))
     db_results = cursor.fetchall()
@@ -67,7 +67,15 @@ def checkDatabase(driver, cursor, platforma, connection, Macbooks):
             cursor.execute(f"DELETE FROM macbooks WHERE platforma = ? AND titlu = ? AND pret_oferta = ?", (platforma, db_macbook[0], db_macbook[1],))
             connection.commit()
             asyncio.run(alert_sold(db_macbook[0],db_macbook[1], platforma, db_macbook[2]))
+'''
 
+def checkDBlastSeen (cursor, connection):
+    cursor.execute("SELECT platforma, titlu, pret_oferta, pret_nou, last_seen FROM macbooks WHERE last_seen < datetime('now', '-2 hours')")
+    results = cursor.fetchall()
+    for result in results:
+        asyncio.run(alert_sold(result[1],result[2], result[0], result[3]))
+        cursor.execute("DELETE FROM MACBOOKS WHERE TITLU = ? AND PRET_OFERTA = ? AND PLATFORMA = ?", (result[1], result[2], result[0],))
+    connection.commit()
 
 def setupDatabase():
     connection = sqlite3.connect('macbooks.db')
@@ -82,7 +90,8 @@ def setupDatabase():
         pret_nou TEXT,
         first_seen TEXT DEFAULT (datetime('now', 'localtime')),
         activ INTEGER DEFAULT 1,
-        platforma TEXT
+        platforma TEXT,
+        last_seen TEXT DEFAULT (datetime('now', 'localtime'))
     )
     ''')
 
@@ -139,12 +148,14 @@ try:
                 print("Data inserted into table")
             else:
                 print("Data already exists in table (checked against price)")
+                cursor.execute("UPDATE macbooks SET last_seen = (datetime('now','localtime'))")
         else:
             print("Data already exists in table")
+            cursor.execute("UPDATE macbooks SET last_seen = (datetime('now','localtime'))")
 
 
 
-    checkDatabase(driver, cursor, "EMAG", connection, Macbooks)        
+    #checkDatabase(driver, cursor, "EMAG", connection, Macbooks)        
 
     print(len(Macbooks))
     total += len(Macbooks)
@@ -191,9 +202,11 @@ try:
                 print("Data inserted into table")
             else:
                 print("Data already exists in table (checked against price)")
+                cursor.execute("UPDATE macbooks SET last_seen = (datetime('now','localtime'))")
         else:
             print("Data already exists in table")
-    checkDatabase(driver, cursor, "ALTEX", connection, Macbooks)     
+            cursor.execute("UPDATE macbooks SET last_seen = (datetime('now','localtime'))")
+    #checkDatabase(driver, cursor, "ALTEX", connection, Macbooks)     
 
     total += len(Macbooks)
     driver.quit()
@@ -247,11 +260,15 @@ try:
                 print("Data inserted into table")
             else:
                 print("Data already exists in table (checked against price)")
+                cursor.execute("UPDATE macbooks SET last_seen = (datetime('now','localtime'))")
         else:
             print("Data already exists in table")
+            cursor.execute("UPDATE macbooks SET last_seen = (datetime('now','localtime'))")
 
     total += len(Macbooks)
     driver.quit()
+
+    checkDBlastSeen(cursor, connection)
 
     print(total)
     cursor.execute("SELECT COUNT(*) FROM MACBOOKS")
