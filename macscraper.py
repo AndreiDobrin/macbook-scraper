@@ -70,7 +70,7 @@ total = 0
 '''
 
 def checkDBlastSeen (cursor, connection):
-    cursor.execute("SELECT platforma, titlu, pret_oferta, pret_nou, last_seen FROM macbooks WHERE last_seen < datetime('now', '-2 hours')")
+    cursor.execute("SELECT platforma, titlu, pret_oferta, pret_nou, last_seen FROM macbooks WHERE last_seen < datetime('now', '-10 minutes', 'localtime')")
     results = cursor.fetchall()
     for result in results:
         asyncio.run(alert_sold(result[1],result[2], result[0], result[3]))
@@ -148,10 +148,10 @@ try:
                 print("Data inserted into table")
             else:
                 print("Data already exists in table (checked against price)")
-                cursor.execute("UPDATE macbooks SET last_seen = (datetime('now','localtime'))")
+                cursor.execute("UPDATE macbooks SET last_seen = (datetime('now','localtime')) WHERE titlu = ? and pret_oferta = ?", (titlu_mac, offerprice_mac,))
         else:
             print("Data already exists in table")
-            cursor.execute("UPDATE macbooks SET last_seen = (datetime('now','localtime'))")
+            cursor.execute("UPDATE macbooks SET last_seen = (datetime('now','localtime')) WHERE titlu = ? and pret_oferta = ?", (titlu_mac, offerprice_mac,))
 
 
 
@@ -202,10 +202,10 @@ try:
                 print("Data inserted into table")
             else:
                 print("Data already exists in table (checked against price)")
-                cursor.execute("UPDATE macbooks SET last_seen = (datetime('now','localtime'))")
+                cursor.execute("UPDATE macbooks SET last_seen = (datetime('now','localtime')) WHERE titlu = ? and pret_oferta = ?", (titlu_mac, offerprice_mac,))
         else:
             print("Data already exists in table")
-            cursor.execute("UPDATE macbooks SET last_seen = (datetime('now','localtime'))")
+            cursor.execute("UPDATE macbooks SET last_seen = (datetime('now','localtime')) WHERE titlu = ? and pret_oferta = ?", (titlu_mac, offerprice_mac,))
     #checkDatabase(driver, cursor, "ALTEX", connection, Macbooks)     
 
     total += len(Macbooks)
@@ -260,10 +260,10 @@ try:
                 print("Data inserted into table")
             else:
                 print("Data already exists in table (checked against price)")
-                cursor.execute("UPDATE macbooks SET last_seen = (datetime('now','localtime'))")
+                cursor.execute("UPDATE macbooks SET last_seen = (datetime('now','localtime')) WHERE titlu = ? and pret_oferta = ?", (titlu_mac, offerprice_mac,))
         else:
             print("Data already exists in table")
-            cursor.execute("UPDATE macbooks SET last_seen = (datetime('now','localtime'))")
+            cursor.execute("UPDATE macbooks SET last_seen = (datetime('now','localtime')) WHERE titlu = ? and pret_oferta = ?", (titlu_mac, offerprice_mac,))
 
     total += len(Macbooks)
     driver.quit()
