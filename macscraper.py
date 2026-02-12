@@ -2,6 +2,7 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
+from telegram.request import HTTPXRequest
 import datetime
 import sqlite3
 
@@ -13,12 +14,14 @@ import asyncio
 import telegram
 
 async def alert_new(titlu, pret_oferta, link, platforma, pret_intreg="Necunoscut"):
-    bot = telegram.Bot(telegram_token)
+    longer_request = HTTPXRequest(connect_timeout=30, read_timeout=30)
+    bot = telegram.Bot(token=telegram_token, request=longer_request)
     async with bot:
         await bot.send_message(text=f"Mac nou pe {platforma}\n{titlu}\nPret intreg: {pret_intreg}\nPret oferta: {pret_oferta}\n{link}", chat_id = chat_token)
 
 async def alert_sold(titlu, pret_oferta, platforma, pret_intreg="Necunoscut"):
-    bot = telegram.Bot(telegram_token)
+    longer_request = HTTPXRequest(connect_timeout=30, read_timeout=30)
+    bot = telegram.Bot(token=telegram_token, request=longer_request)
     async with bot:
         await bot.send_message(text=f"Mac vandut pe {platforma}\n{titlu}\nPret intreg: {pret_intreg}\nPret oferta: {pret_oferta}", chat_id = chat_token)
 
@@ -70,7 +73,7 @@ total = 0
 '''
 
 def checkDBlastSeen (cursor, connection):
-    cursor.execute("SELECT platforma, titlu, pret_oferta, pret_nou, last_seen FROM macbooks WHERE last_seen < datetime('now', '-10 minutes', 'localtime')")
+    cursor.execute("SELECT platforma, titlu, pret_oferta, pret_nou, last_seen FROM macbooks WHERE last_seen < ?", (script_start_time, ))
     results = cursor.fetchall()
     for result in results:
         asyncio.run(alert_sold(result[1],result[2], result[0], result[3]))
@@ -89,9 +92,10 @@ def setupDatabase():
         pret_oferta TEXT,
         pret_nou TEXT,
         first_seen TEXT DEFAULT (datetime('now', 'localtime')),
+        last_seen TEXT DEFAULT (datetime('now', 'localtime')),
         activ INTEGER DEFAULT 1,
         platforma TEXT,
-        last_seen TEXT DEFAULT (datetime('now', 'localtime'))
+
     )
     ''')
 
@@ -109,8 +113,13 @@ setupDatabase()
 
 
 try:
+    
 
     connection = sqlite3.connect('macbooks.db')
+    cursor = connection.cursor()
+
+    cursor.execute("SELECT datetime('now', 'localtime')")
+    script_start_time = cursor.fetchone()[0]
     # ======================= EMAG ===============================
     link = "https://www.emag.ro/laptopuri/brand/apple/resigilate/c?ref=lst_leftbar_6407_resealed"
     driver = webdriver.Chrome()
@@ -155,12 +164,12 @@ try:
 
 
 
-    #checkDatabase(driver, cursor, "EMAG", connection, Macbooks)        
+    #checkDatabase(driver, cursor, "EMAG", connection, Macbooks)
 
     print(len(Macbooks))
     total += len(Macbooks)
     driver.quit()
-
+    '''
     # ======================= ALTEX ===============================
 
     link = "https://altex.ro/resigilate/laptopuri/cpl/filtru/brand-3334/apple/"
@@ -211,11 +220,11 @@ try:
     total += len(Macbooks)
     driver.quit()
 
-    
+    '''
 
     # ======================= ISTYLE ===============================
 
-    link = "https://istyle.ro/collections/produse-resigilate?filter.p.product_type=Mac&filter.v.price.gte=&filter.v.price.lte=&sort_by=best-selling"
+    link = "https://istyle.ro/collections/produse-resigilate?filter.p.product_type=Mac+Resigilat&filter.v.price.gte=&filter.v.price.lte=&sort_by=best-selling"
     driver = webdriver.Chrome()
     wait = WebDriverWait(driver, timeout=100)
     driver.get(link)
