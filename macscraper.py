@@ -25,52 +25,102 @@ async def alert_sold(titlu, pret_oferta, platforma, pret_intreg="Necunoscut"):
     async with bot:
         await bot.send_message(text=f"Mac vandut pe {platforma}\n{titlu}\nPret intreg: {pret_intreg}\nPret oferta: {pret_oferta}", chat_id = chat_token)
 
+
+def emag_info_extraction(title):
+
+    # title = 'Laptop Apple MacBook Pro 16" cu procesor Apple M4 Pro, 14 nuclee CPU si 20 nuclee GPU, 24GB RAM, 512GB SSD, Space Black, Textura Nano, Tastatura Internationala'
+
+    i = title.find("MacBook ") + len("MacBook ")
+    global type
+    type = ""
+    while title[i] != " ":
+        type = type + title[i]
+        i += 1
+    #print(type)
+
+    global size
+    size = title[title.find('"') - 2] + title[title.find('"') - 1] 
+    #print(size)
+
+    global procesor
+    procesor = title[title.find('cu procesor ') + len('cu procesor ') : title.find(',')]
+    #print(procesor)
+
+    global cpu_cores
+    cpu_cores = ""
+    if title.find(" nuclee CPU"):
+        cpu_cores = title[title.find(" nuclee CPU") - 2] + title[title.find(" nuclee CPU") - 1]
+    else:
+        cpu_cores = "N/A"
+
+    #print(cpu_cores)
+
+    global gpu_cores
+    if title.find(" nuclee GPU"):
+        gpu_cores = title[title.find(" nuclee GPU") - 2] + title[title.find(" nuclee GPU") - 1]
+        print(gpu_cores)
+    else:
+        gpu_cores = "N/A"
+
+
+    global ram
+    ram = title[title.find("GB RAM") - 2] + title[title.find("GB RAM") - 1]
+    #print(ram)
+
+    global storage
+    storage = title[title.find("GB RAM, ")+len("GB RAM, ") : title.find("GB SSD")]
+    #print(storage)
+
+
+    i = title.find("GB SSD, ") + len("GB SSD, ")
+    j = title[i:].find(",")
+    global color
+    color = title[i : i+j]
+    #print(color)
+
+    global textura_nano
+    if title.find("Textura Nano") == 1:
+        textura_nano = 1
+    else:
+        textura_nano = 0
+    print(textura_nano)
+
+    # last_seen = (datetime('now','localtime'))
+
+
+def emag_scraper(wait, connection, link="https://www.emag.ro/laptopuri/brand/apple/resigilate/c?ref=lst_leftbar_6407_resealed"):
+    # ======================= EMAG ===============================
+    driver = webdriver.Chrome()
+    driver.get(link)
+    try:
+        wait.until(EC.visibility_of_element_located((By.CLASS_NAME, "card-standard")))
+
+        product_cards = driver.find_elements(By.CLASS_NAME, "card-standard")
+
+        for product in product_cards:
+            title = product.find_element(By.CLASS_NAME, "card-v2-title").text
+            offerprice = product.find_element(By.CLASS_NAME, "product-new-price").text
+            product_fullprice = product.find_element(By.CLASS_NAME, "pricing").text
+            product_link = product.find_element(By.CLASS_NAME, "card-v2-thumb").get_attribute("href")
+            print(title)
+            # print(product_fullprice)
+            print(offerprice)
+            print(product_link)
+            print("=========================")
+
+            
+                    
+    except:
+        print("Error: Timeout waiting for EMAG product cards.") 
+    finally:
+        driver.quit()
+
+
+    #checkDatabase(driver, cursor, "EMAG", connection, Macbooks)
+
 total = 0
 
-'''def checkDatabase(driver, cursor, platforma, connection, Macbooks):
-    
-    # definire variabile pentru fiecare platforma pentru cod curat
-    # iStyle
-    if platforma == "ISTYLE":
-        by_object_titlu = By.CSS_SELECTOR
-        id_titlu = "div.apl-section-product-title > h1:nth-child(1)"
 
-        by_object_pret = By.CSS_SELECTOR
-        id_pret = "#price-template--16719916499033__main > div:nth-child(2) > div:nth-child(1) > p:nth-child(1) > span:nth-child(1)"
-
-    # eMag
-    elif platforma == "EMAG":
-        by_object_titlu = By.CLASS_NAME
-        id_titlu = "card-v2-title"
-
-        by_object_pret = By.CLASS_NAME
-        id_pret = "product-new-price"
-
-    # Altex
-    elif platforma == "ALTEX":
-        by_object_titlu = By.CLASS_NAME
-        id_titlu = "Product-name"
-
-        by_object_pret = By.CSS_SELECTOR
-        id_pret = "li.Products-item > div:nth-child(1) > div:nth-child(5) > div:nth-child(1) > div:nth-child(2) > span:nth-child(2) > span:nth-child(1)"
-
-
-    cursor.execute(f"SELECT titlu, pret_oferta, pret_nou FROM macbooks WHERE platforma = ?", (platforma,))
-    db_results = cursor.fetchall()
-    for db_macbook in db_results:
-        ok = 0
-        for Macbook in Macbooks:
-            if db_macbook[0] == Macbook.find_element(by_object_titlu, id_titlu).text and db_macbook[1] == Macbook.find_element(by_object_pret, id_pret).text:
-                print(db_macbook[0])
-                print(Macbook.find_element(by_object_titlu, id_titlu).text)
-                print("===================================================================")
-                ok = 1
-                break
-        if ok == 0:
-            cursor.execute(f"DELETE FROM macbooks WHERE platforma = ? AND titlu = ? AND pret_oferta = ?", (platforma, db_macbook[0], db_macbook[1],))
-            connection.commit()
-            asyncio.run(alert_sold(db_macbook[0],db_macbook[1], platforma, db_macbook[2]))
-'''
 
 def checkDBlastSeen (cursor, connection):
     cursor.execute("SELECT platforma, titlu, pret_oferta, pret_nou, last_seen FROM macbooks WHERE last_seen < ?", (script_start_time, ))
@@ -86,25 +136,39 @@ def setupDatabase():
 
 
     cursor.execute('''
-    CREATE TABLE IF NOT EXISTS macbooks (
-        link TEXT PRIMARY KEY,
-        titlu TEXT,
-        pret_oferta TEXT,
-        pret_nou TEXT,
-        first_seen TEXT DEFAULT (datetime('now', 'localtime')),
+    CREATE TABLE IF NOT EXISTS model (
+        id_model INTEGER PRIMARY KEY,
+        type TEXT NOT NULL,
+        title TEXT NOT NULL, 
+        inch NUMERIC NOT NULL,
+        cpu TEXT NOT NULL,
+        cpu_cores INTEGER NOT NULL,
+        gpu_cores INTEGER NOT NULL,
+        ram INTEGER NOT NULL,
+        storage INTEGER NOT NULL,
+        color TEXT NOT NULL,
+        nano_texture INTEGER NOT NULL check(nano_texture = 0 or nano_texture = 1)
+    );
+    CREATE TABLE IF NOT EXISTS product (
+        id_product INTEGER PRIMARY KEY,
+        id_model INTEGER NOT NULL,
+        link TEXT NOT NULL,
+        price NUMERIC NOT NULL,
         last_seen TEXT DEFAULT (datetime('now', 'localtime')),
-        activ INTEGER DEFAULT 1,
-        platforma TEXT,
+        platform TEXT,
+        active INTEGER check(active = 0 or active = 1),
+        sealed INTEGER check(sealed = 0 or sealed = 1),
+        sale NUMERIC,
+        description TEXT,
 
+        FOREIGN KEY (id_model) REFERENCES model(id_model)
     )
     ''')
 
     connection.commit()
     connection.close()
 
-class scraper:
-    def __init__ (self, platforma):
-        self.platforma = platforma
+
     
 
 
@@ -120,55 +184,6 @@ try:
 
     cursor.execute("SELECT datetime('now', 'localtime')")
     script_start_time = cursor.fetchone()[0]
-    # ======================= EMAG ===============================
-    link = "https://www.emag.ro/laptopuri/brand/apple/resigilate/c?ref=lst_leftbar_6407_resealed"
-    driver = webdriver.Chrome()
-    driver.get(link)
-    driver.implicitly_wait(999)
-    Macbooks = driver.find_elements(By.CLASS_NAME, "card-standard")
-    for db_macbook in Macbooks:
-        titlu_mac = db_macbook.find_element(By.CLASS_NAME, "card-v2-title").text
-        fullprice_mac = db_macbook.find_element(By.CLASS_NAME, "pricing").text
-        offerprice_mac = db_macbook.find_element(By.CLASS_NAME, "product-new-price").text
-        link_mac = db_macbook.find_element(By.CLASS_NAME, "card-v2-thumb").get_attribute("href")
-        print(titlu_mac)
-        print(fullprice_mac)
-        print(offerprice_mac)
-        print(link_mac)
-        print("=========================")
-        cursor = connection.cursor()
-        query = f"SELECT titlu FROM macbooks WHERE link = '{link_mac}'"
-        cursor.execute(query)
-        result = cursor.fetchone()
-        if result is None:
-            cursor.execute(f"SELECT pret_oferta FROM macbooks WHERE titlu = '{titlu_mac}'")
-            results = cursor.fetchall()
-            ok = 1
-            for pret_oferta in results:
-                if pret_oferta[0] == offerprice_mac:
-                    ok = 0
-                    break
-                
-            if ok == 1:
-                asyncio.run(alert_new(titlu_mac, offerprice_mac, link_mac, "EMAG", fullprice_mac))
-                query = f"INSERT INTO macbooks (link, titlu, pret_oferta, platforma, pret_nou) VALUES (?, ?, ?, 'EMAG', ?)"
-                cursor.execute(query, (link_mac, titlu_mac, offerprice_mac, fullprice_mac,))
-                connection.commit()
-                print("Data inserted into table")
-            else:
-                print("Data already exists in table (checked against price)")
-                cursor.execute("UPDATE macbooks SET last_seen = (datetime('now','localtime')) WHERE titlu = ? and pret_oferta = ?", (titlu_mac, offerprice_mac,))
-        else:
-            print("Data already exists in table")
-            cursor.execute("UPDATE macbooks SET last_seen = (datetime('now','localtime')) WHERE titlu = ? and pret_oferta = ?", (titlu_mac, offerprice_mac,))
-
-
-
-    #checkDatabase(driver, cursor, "EMAG", connection, Macbooks)
-
-    print(len(Macbooks))
-    total += len(Macbooks)
-    driver.quit()
     '''
     # ======================= ALTEX ===============================
 
@@ -220,7 +235,7 @@ try:
     total += len(Macbooks)
     driver.quit()
 
-    '''
+  
 
     # ======================= ISTYLE ===============================
 
@@ -282,6 +297,7 @@ try:
     print(total)
     cursor.execute("SELECT COUNT(*) FROM MACBOOKS")
     print(cursor.fetchall())
+    '''
 except sqlite3.Error as error:
    print('Error occurred: ', error)
 finally:
