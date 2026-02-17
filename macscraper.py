@@ -28,90 +28,143 @@ async def alert_sold(titlu, pret_oferta, platforma, pret_intreg="Necunoscut"):
 
 def emag_info_extraction(title):
 
-    # title = 'Laptop Apple MacBook Pro 16" cu procesor Apple M4 Pro, 14 nuclee CPU si 20 nuclee GPU, 24GB RAM, 512GB SSD, Space Black, Textura Nano, Tastatura Internationala'
 
     i = title.find("MacBook ") + len("MacBook ")
-    global type
-    type = ""
+    global product_type
+    product_type = ""
     while title[i] != " ":
-        type = type + title[i]
+        product_type = product_type + title[i]
         i += 1
-    #print(type)
+    print("product_type:", product_type)
 
-    global size
-    size = title[title.find('"') - 2] + title[title.find('"') - 1] 
-    #print(size)
+    global product_size
+    product_size = title[title.find('"') - 2] + title[title.find('"') - 1] 
+    print("product_size:", product_size)
 
-    global procesor
-    procesor = title[title.find('cu procesor ') + len('cu procesor ') : title.find(',')]
-    #print(procesor)
+    global product_cpu
+    product_cpu = title[title.find('cu procesor ') + len('cu procesor ') : title.find(',', title.find('cu procesor ') + len('cu procesor '))]
+    print("product_cpu:", product_cpu)
 
-    global cpu_cores
-    cpu_cores = ""
+    global product_cpu_cores
+    product_cpu_cores = ""
     if title.find(" nuclee CPU"):
-        cpu_cores = title[title.find(" nuclee CPU") - 2] + title[title.find(" nuclee CPU") - 1]
+        for i in reversed(title[:title.find(" nuclee CPU")]):
+            if i.isdigit() == False:
+                break
+            product_cpu_cores = i + product_cpu_cores
+        print("product_cpu_cores:", product_cpu_cores)
     else:
-        cpu_cores = "N/A"
+        product_cpu_cores = "N/A"
 
-    #print(cpu_cores)
-
-    global gpu_cores
+    global product_gpu_cores
+    product_gpu_cores = ""
     if title.find(" nuclee GPU"):
-        gpu_cores = title[title.find(" nuclee GPU") - 2] + title[title.find(" nuclee GPU") - 1]
-        print(gpu_cores)
+        for i in reversed(title[:title.find(" nuclee GPU")]):
+            if i.isdigit() == False:
+                break
+            product_gpu_cores = i + product_gpu_cores
+        print("product_gpu_cores:", product_gpu_cores)
     else:
-        gpu_cores = "N/A"
+        product_gpu_cores = "N/A"
 
 
-    global ram
-    ram = title[title.find("GB RAM") - 2] + title[title.find("GB RAM") - 1]
-    #print(ram)
+    global product_ram
+    product_ram = ""
+    for i in reversed(title[:title.find("GB")]):
+        if i.isdigit() == False:
+            break
+        product_ram = i + product_ram
 
-    global storage
-    storage = title[title.find("GB RAM, ")+len("GB RAM, ") : title.find("GB SSD")]
-    #print(storage)
+    print("product_ram:", product_ram)
+        
+
+    global product_storage
+    product_storage = ""
+    for i in reversed(title[title.find("GB")+len("GB") : title.find("GB", title.find("GB")+len("GB"))]):
+        if i.isdigit() == False:
+            break
+        product_storage = i + product_storage
+    print("product_storage:", product_storage)
 
 
     i = title.find("GB SSD, ") + len("GB SSD, ")
     j = title[i:].find(",")
-    global color
-    color = title[i : i+j]
-    #print(color)
+    x = title[title.find(",", title.find("GB")) + 1 :]
+    y = title[title.find(",", title.find(",", title.find("GB")) + 1):]
+    z = title[title.find(",", title.find(",", title.find("GB")) + 1) + 2 : title.find(",", title.find(",", title.find(",", title.find("GB")) + 1) + 2)]
+    global product_color
+    product_color = title[title.find(",", title.find(",", title.find("GB")) + 1) + 2 : title.find(",", title.find(",", title.find(",", title.find("GB")) + 1) + 2)]
+    print("product_color:", product_color)
 
-    global textura_nano
+    global product_nano_texture
     if title.find("Textura Nano") == 1:
-        textura_nano = 1
+        product_nano_texture = 1
     else:
-        textura_nano = 0
-    print(textura_nano)
+        product_nano_texture = 0
+    print("product_nano_texture:", product_nano_texture)
 
     # last_seen = (datetime('now','localtime'))
 
 
-def emag_scraper(wait, connection, link="https://www.emag.ro/laptopuri/brand/apple/resigilate/c?ref=lst_leftbar_6407_resealed"):
+#title = 'RESIGILAT: Laptop Apple MacBook Air 13", cu procesor Apple M4, 10 nuclee CPU si 10 nuclee GPU, 16GB RAM, 512GB, Starlight, Tastatura Internationala, Manual RO'
+#title = 'RESIGILAT: Laptop Apple MacBook Air 13", cu procesor Apple M3, 8 nuclee CPU si 8 nuclee GPU, 8GB, 256GB, Silver, INT KB'
+
+#emag_info_extraction(title)
+
+def emag_scraper(connection, cursor, link="https://www.emag.ro/laptopuri/brand/apple/resigilate/c?ref=lst_leftbar_6407_resealed"):
     # ======================= EMAG ===============================
     driver = webdriver.Chrome()
     driver.get(link)
+    wait = WebDriverWait(driver, timeout=30)
     try:
         wait.until(EC.visibility_of_element_located((By.CLASS_NAME, "card-standard")))
 
         product_cards = driver.find_elements(By.CLASS_NAME, "card-standard")
 
         for product in product_cards:
-            title = product.find_element(By.CLASS_NAME, "card-v2-title").text
-            offerprice = product.find_element(By.CLASS_NAME, "product-new-price").text
+            product_title = product.find_element(By.CLASS_NAME, "card-v2-title").text
+            product_offerprice = product.find_element(By.CLASS_NAME, "product-new-price").text
             product_fullprice = product.find_element(By.CLASS_NAME, "pricing").text
             product_link = product.find_element(By.CLASS_NAME, "card-v2-thumb").get_attribute("href")
-            print(title)
+            product_description = ""
+            print(product_title)
             # print(product_fullprice)
-            print(offerprice)
+            print(product_offerprice)
             print(product_link)
             print("=========================")
 
-            
-                    
-    except:
-        print("Error: Timeout waiting for EMAG product cards.") 
+            emag_info_extraction(product_title)
+
+            query = "SELECT id_model FROM model WHERE type = ? AND size = ? AND cpu = ? AND cpu_cores = ? AND gpu_cores = ? AND ram = ? AND storage = ? AND color = ? AND nano_texture = ?"
+            cursor.execute(query, (product_type, product_size, product_cpu, product_cpu_cores, product_gpu_cores, product_ram, product_storage, product_color, product_nano_texture, ))
+
+            results = cursor.fetchall()
+            if len(results) == 0:
+                    query = "INSERT INTO model (type, title, size, cpu, cpu_cores, gpu_cores, ram, storage, color, nano_texture) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    cursor.execute(query, (product_type, product_title, product_size, product_cpu, product_cpu_cores, product_gpu_cores, product_ram, product_storage, product_color, product_nano_texture, ))
+                    query = "INSERT INTO product (id_model, link, price, platform, active, sealed, description) VALUES (?, ?, ?, ?, ?, ?, ?)"
+                    cursor.execute(query, (cursor.lastrowid, product_link, product_offerprice, 'EMAG', 1, 0, product_description))
+                    connection.commit()
+                    print("Produs inserat in MODEL si PRODUCT")
+                    asyncio.run(alert_new(product_title, product_offerprice, product_link, 'EMAG'))
+            else:
+                query = "SELECT * FROM product WHERE id_model = ? AND price = ?"
+                cursor.execute(query, (results[0][0], product_offerprice, ))
+                connection.commit()
+                if cursor.fetchone() is None:
+                    query = "INSERT INTO product (id_model, link, price, platform, active, sealed, description) VALUES (?, ?, ?, ?, ?, ?, ?)"
+                    cursor.execute(query, (results[0][0], product_link, product_offerprice, 'EMAG', 1, 0, product_description))
+                    connection.commit()
+                    print("Produs inserat in PRODUCT")
+                    asyncio.run(alert_new(product_title, product_offerprice, product_link, 'EMAG'))
+                else:
+                    print("Produsul deja exista")
+                    query = "UPDATE product SET last_seen = datetime('now', 'localtime') WHERE id_model = ? AND price = ?"
+                    cursor.execute(query, (results[0][0], product_offerprice, ))
+                    connection.commit()
+    except Exception as e:
+        print("Error: Timeout waiting for EMAG product cards.")
+        print(e) 
     finally:
         driver.quit()
 
@@ -123,24 +176,22 @@ total = 0
 
 
 def checkDBlastSeen (cursor, connection):
-    cursor.execute("SELECT platforma, titlu, pret_oferta, pret_nou, last_seen FROM macbooks WHERE last_seen < ?", (script_start_time, ))
+    cursor.execute("SELECT p.platform, m.title, p.price, p.last_seen, p.id_model FROM product p JOIN model m ON p.id_model = m.id_model WHERE p.last_seen < ?", (script_start_time, ))
     results = cursor.fetchall()
     for result in results:
-        asyncio.run(alert_sold(result[1],result[2], result[0], result[3]))
-        cursor.execute("DELETE FROM MACBOOKS WHERE TITLU = ? AND PRET_OFERTA = ? AND PLATFORMA = ?", (result[1], result[2], result[0],))
+        asyncio.run(alert_sold(result[1],result[2], result[0]))
+        cursor.execute("DELETE FROM product WHERE id_model = ? AND price = ?", (result[4], result[2], ))
     connection.commit()
 
 def setupDatabase():
     connection = sqlite3.connect('macbooks.db')
     cursor = connection.cursor()
-
-
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS model (
         id_model INTEGER PRIMARY KEY,
         type TEXT NOT NULL,
         title TEXT NOT NULL, 
-        inch NUMERIC NOT NULL,
+        size NUMERIC NOT NULL,
         cpu TEXT NOT NULL,
         cpu_cores INTEGER NOT NULL,
         gpu_cores INTEGER NOT NULL,
@@ -148,7 +199,9 @@ def setupDatabase():
         storage INTEGER NOT NULL,
         color TEXT NOT NULL,
         nano_texture INTEGER NOT NULL check(nano_texture = 0 or nano_texture = 1)
-    );
+    )
+    ''')
+    cursor.execute('''
     CREATE TABLE IF NOT EXISTS product (
         id_product INTEGER PRIMARY KEY,
         id_model INTEGER NOT NULL,
@@ -168,22 +221,17 @@ def setupDatabase():
     connection.commit()
     connection.close()
 
-
-    
-
-
-
 setupDatabase()
-
-
 try:
-    
-
     connection = sqlite3.connect('macbooks.db')
     cursor = connection.cursor()
 
     cursor.execute("SELECT datetime('now', 'localtime')")
     script_start_time = cursor.fetchone()[0]
+
+
+    emag_scraper(connection, cursor)
+    checkDBlastSeen(cursor, connection)
     '''
     # ======================= ALTEX ===============================
 
