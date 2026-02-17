@@ -5,6 +5,8 @@ from selenium.webdriver.support.wait import WebDriverWait
 from telegram.request import HTTPXRequest
 import datetime
 import sqlite3
+import re
+
 
 with open("telegram_token.txt", "r") as f:
     telegram_token = f.readline()[:-1]
@@ -26,6 +28,137 @@ async def alert_sold(titlu, pret_oferta, platforma, pret_intreg="Necunoscut"):
         await bot.send_message(text=f"Mac vandut pe {platforma}\n{titlu}\nPret intreg: {pret_intreg}\nPret oferta: {pret_oferta}", chat_id = chat_token)
 
 
+
+
+def extract_macbook_specs(title):
+    # Normalize title: remove extra spaces to make regex easier
+    clean_title = " ".join(title.split())
+    
+    specs = {
+        "type": "N/A",
+        "size": "N/A",
+        "cpu": "N/A",
+        "cpu_cores": "N/A",
+        "gpu_cores": "N/A",
+        "ram": "N/A",
+        "storage": "N/A",
+        "color": "N/A",
+        "nano_texture": 0
+    }
+
+    # 1. EXTRACT TYPE (Air vs Pro)
+    if "MacBook Air" in clean_title:
+        specs["type"] = "MacBook Air"
+    elif "MacBook Pro" in clean_title:
+        specs["type"] = "MacBook Pro"
+
+    # 2. EXTRACT SCREEN SIZE 
+    # Looks for number followed by " or -inch. 
+    # Handles: 13", 15.3", 13-inch, 14.2"
+    size_match = re.search(r'(\d+(\.\d+)?)(?="| -inch|-inch)', clean_title)
+    if size_match:
+        specs["size"] = float(size_match.group(1))
+
+    # 3. EXTRACT CPU
+    # Looks for "cu procesor" followed by the chip name until the next comma or keyword
+    # Matches: "Apple M2", "Apple M3 Pro", "Apple M1 Max"
+    cpu_match = re.search(r'cu procesor (Apple M\w+(?: Pro| Max| Ultra)?)', clean_title, re.IGNORECASE)
+    if cpu_match:
+        specs["cpu"] = cpu_match.group(1)
+
+    # 4. EXTRACT CORES (CPU & GPU)
+    # Looks for digits before "nuclee CPU" or "nuclee GPU"
+    cpu_cores_match = re.search(r'(\d+)\s*nuclee CPU', clean_title)
+    if cpu_cores_match:
+        specs["cpu_cores"] = int(cpu_cores_match.group(1))
+
+    gpu_cores_match = re.search(r'(\d+)\s*nuclee GPU', clean_title)
+    if gpu_cores_match:
+        specs["gpu_cores"] = int(gpu_cores_match.group(1))
+
+    # 5. EXTRACT RAM
+    # Looks for digits followed by GB.
+    # To avoid confusion with storage, we assume RAM is the FIRST "GB" occurrence 
+    # OR we look for "GB" that is explicitly NOT followed by "SSD" if possible, 
+    # but eMAG titles are messy. 
+    # Strategy: Find all "X GB" patterns. RAM is usually the smaller one (8, 16, 24, 32, etc) compared to storage (256, 512).
+    # OR: RAM is usually listed before storage.
+    
+    # Let's find all size patterns (GB or TB)
+    # matches tuples like [('24', 'GB'), ('1', 'TB')]
+    memory_matches = re.findall(r'(\d+)\s*(GB|TB)', clean_title)
+    
+    found_ram = False
+    found_storage = False
+
+    for amount, unit in memory_matches:
+        amount = int(amount)
+        
+        # Logic: If it's TB, it's definitely storage
+        if unit == "TB":
+            # Convert TB to GB for standardization, or keep as string "1TB"
+            # Let's keep the user's format preference
+            specs["storage"] = amount * 1024
+            found_storage = True
+            
+        # If it's GB
+        elif unit == "GB":
+            # Heuristic: RAM is usually <= 128GB. Storage is usually >= 256GB.
+            # Edge case: 128GB Storage exists on old models, but rare on M-series.
+            # Edge case: 96GB RAM exists.
+            
+            # If we haven't found RAM yet, and this looks like a RAM amount, take it.
+            if not found_ram and amount in [8, 16, 18, 24, 32, 36, 48, 64, 96, 128]:
+                 # Check if the word "SSD" follows immediately. If so, it's storage.
+                 # (We need a stricter check for this)
+                 if f"{amount} {unit} SSD" in clean_title or f"{amount}{unit} SSD" in clean_title:
+                     specs["storage"] = amount
+                     found_storage = True
+                 else:
+                     specs["ram"] = amount
+                     found_ram = True
+            
+            # If we already have RAM, or this is a large number (256, 512), it's storage
+            elif amount >= 256:
+                specs["storage"] = amount
+                found_storage = True
+                
+            # If we have RAM, and we find another small number (e.g. 8GB RAM, 128GB SSD), update storage
+            elif found_ram and not found_storage:
+                 specs["storage"] = amount
+                 found_storage = True
+
+    # 6. EXTRACT COLOR
+    # Searching by comma position is dangerous. It's better to search for known colors.
+    known_colors = [
+        "Silver", "Space Grey", "Space Gray", "Midnight", 
+        "Starlight", "Space Black", "Sky Blue", "Gold", "Rose Gold"
+    ]
+    
+    for color in known_colors:
+        if color.lower() in clean_title.lower():
+            specs["color"] = color
+            break
+            
+    # Fallback for color: If not found, try the comma logic (between storage and keyboard)
+    if specs["color"] == "N/A":
+        try:
+            # Attempt to grab text between the last spec (Storage) and "Tastatura" or end
+            # This is a bit advanced, skipping for now as the list above covers 99% of Macs.
+            pass
+        except:
+            pass
+
+    # 7. NANO TEXTURE
+    # Check for "Textura Nano" or "Nano-texture"
+    if "Textura Nano" in clean_title or "Nano-texture" in clean_title:
+        specs["nano_texture"] = 1
+    else:
+        specs["nano_texture"] = 0
+
+    return specs
+
+'''
 def emag_info_extraction(title):
 
 
@@ -104,7 +237,7 @@ def emag_info_extraction(title):
     print("product_nano_texture:", product_nano_texture)
 
     # last_seen = (datetime('now','localtime'))
-
+'''
 
 #title = 'RESIGILAT: Laptop Apple MacBook Air 13", cu procesor Apple M4, 10 nuclee CPU si 10 nuclee GPU, 16GB RAM, 512GB, Starlight, Tastatura Internationala, Manual RO'
 #title = 'RESIGILAT: Laptop Apple MacBook Air 13", cu procesor Apple M3, 8 nuclee CPU si 8 nuclee GPU, 8GB, 256GB, Silver, INT KB'
@@ -124,6 +257,17 @@ def emag_scraper(connection, cursor, link="https://www.emag.ro/laptopuri/brand/a
         for product in product_cards:
             product_title = product.find_element(By.CLASS_NAME, "card-v2-title").text
             product_offerprice = product.find_element(By.CLASS_NAME, "product-new-price").text
+
+            # 1. Use Regex to find the number pattern (digits, dots, commas)
+            match = re.search(r'[\d\.,]+', product_offerprice)
+
+            if match:
+                raw_price = match.group(0)  # "11.699,99"
+
+                # 2. Convert to a standard float for SQLite
+                # Remove the thousands dot (11.699 -> 11699)
+                # Replace the decimal comma (11699,99 -> 11699.99)
+                product_offerprice = float(raw_price.replace('.', '').replace(',', '.'))
             product_fullprice = product.find_element(By.CLASS_NAME, "pricing").text
             product_link = product.find_element(By.CLASS_NAME, "card-v2-thumb").get_attribute("href")
             product_description = ""
@@ -133,15 +277,15 @@ def emag_scraper(connection, cursor, link="https://www.emag.ro/laptopuri/brand/a
             print(product_link)
             print("=========================")
 
-            emag_info_extraction(product_title)
+            specs = extract_macbook_specs(product_title)
 
             query = "SELECT id_model FROM model WHERE type = ? AND size = ? AND cpu = ? AND cpu_cores = ? AND gpu_cores = ? AND ram = ? AND storage = ? AND color = ? AND nano_texture = ?"
-            cursor.execute(query, (product_type, product_size, product_cpu, product_cpu_cores, product_gpu_cores, product_ram, product_storage, product_color, product_nano_texture, ))
+            cursor.execute(query, (specs['type'], specs['size'], specs['cpu'], specs['cpu_cores'], specs['gpu_cores'], specs['ram'], specs['storage'], specs['color'], specs['nano_texture'], ))
 
             results = cursor.fetchall()
             if len(results) == 0:
                     query = "INSERT INTO model (type, title, size, cpu, cpu_cores, gpu_cores, ram, storage, color, nano_texture) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-                    cursor.execute(query, (product_type, product_title, product_size, product_cpu, product_cpu_cores, product_gpu_cores, product_ram, product_storage, product_color, product_nano_texture, ))
+                    cursor.execute(query, (specs['type'], product_title, specs['size'], specs['cpu'], specs['cpu_cores'], specs['gpu_cores'], specs['ram'], specs['storage'], specs['color'], specs['nano_texture'], ))
                     query = "INSERT INTO product (id_model, link, price, platform, active, sealed, description) VALUES (?, ?, ?, ?, ?, ?, ?)"
                     cursor.execute(query, (cursor.lastrowid, product_link, product_offerprice, 'EMAG', 1, 0, product_description))
                     connection.commit()
