@@ -6,6 +6,8 @@ from telegram.request import HTTPXRequest
 import datetime
 import sqlite3
 import re
+from selenium.common.exceptions import TimeoutException, NoSuchElementException, StaleElementReferenceException
+
 
 
 with open("telegram_token.txt", "r") as f:
@@ -43,8 +45,13 @@ def extract_macbook_specs(title):
         "ram": "N/A",
         "storage": "N/A",
         "color": "N/A",
-        "nano_texture": 0
+        "nano_texture": 0,
+        "sealed": 1
     }
+
+    # 0. EXTRACT SEALED STATUS
+    if "RESIGILAT" in clean_title:
+        specs["sealed"] = 0
 
     # 1. EXTRACT TYPE (Air vs Pro)
     if "MacBook Air" in clean_title:
@@ -158,91 +165,6 @@ def extract_macbook_specs(title):
 
     return specs
 
-'''
-def emag_info_extraction(title):
-
-
-    i = title.find("MacBook ") + len("MacBook ")
-    global product_type
-    product_type = ""
-    while title[i] != " ":
-        product_type = product_type + title[i]
-        i += 1
-    print("product_type:", product_type)
-
-    global product_size
-    product_size = title[title.find('"') - 2] + title[title.find('"') - 1] 
-    print("product_size:", product_size)
-
-    global product_cpu
-    product_cpu = title[title.find('cu procesor ') + len('cu procesor ') : title.find(',', title.find('cu procesor ') + len('cu procesor '))]
-    print("product_cpu:", product_cpu)
-
-    global product_cpu_cores
-    product_cpu_cores = ""
-    if title.find(" nuclee CPU"):
-        for i in reversed(title[:title.find(" nuclee CPU")]):
-            if i.isdigit() == False:
-                break
-            product_cpu_cores = i + product_cpu_cores
-        print("product_cpu_cores:", product_cpu_cores)
-    else:
-        product_cpu_cores = "N/A"
-
-    global product_gpu_cores
-    product_gpu_cores = ""
-    if title.find(" nuclee GPU"):
-        for i in reversed(title[:title.find(" nuclee GPU")]):
-            if i.isdigit() == False:
-                break
-            product_gpu_cores = i + product_gpu_cores
-        print("product_gpu_cores:", product_gpu_cores)
-    else:
-        product_gpu_cores = "N/A"
-
-
-    global product_ram
-    product_ram = ""
-    for i in reversed(title[:title.find("GB")]):
-        if i.isdigit() == False:
-            break
-        product_ram = i + product_ram
-
-    print("product_ram:", product_ram)
-        
-
-    global product_storage
-    product_storage = ""
-    for i in reversed(title[title.find("GB")+len("GB") : title.find("GB", title.find("GB")+len("GB"))]):
-        if i.isdigit() == False:
-            break
-        product_storage = i + product_storage
-    print("product_storage:", product_storage)
-
-
-    i = title.find("GB SSD, ") + len("GB SSD, ")
-    j = title[i:].find(",")
-    x = title[title.find(",", title.find("GB")) + 1 :]
-    y = title[title.find(",", title.find(",", title.find("GB")) + 1):]
-    z = title[title.find(",", title.find(",", title.find("GB")) + 1) + 2 : title.find(",", title.find(",", title.find(",", title.find("GB")) + 1) + 2)]
-    global product_color
-    product_color = title[title.find(",", title.find(",", title.find("GB")) + 1) + 2 : title.find(",", title.find(",", title.find(",", title.find("GB")) + 1) + 2)]
-    print("product_color:", product_color)
-
-    global product_nano_texture
-    if title.find("Textura Nano") == 1:
-        product_nano_texture = 1
-    else:
-        product_nano_texture = 0
-    print("product_nano_texture:", product_nano_texture)
-
-    # last_seen = (datetime('now','localtime'))
-'''
-
-#title = 'RESIGILAT: Laptop Apple MacBook Air 13", cu procesor Apple M4, 10 nuclee CPU si 10 nuclee GPU, 16GB RAM, 512GB, Starlight, Tastatura Internationala, Manual RO'
-#title = 'RESIGILAT: Laptop Apple MacBook Air 13", cu procesor Apple M3, 8 nuclee CPU si 8 nuclee GPU, 8GB, 256GB, Silver, INT KB'
-
-#emag_info_extraction(title)
 
 def emag_scraper(connection, cursor, link="https://www.emag.ro/laptopuri/brand/apple/resigilate/c?ref=lst_leftbar_6407_resealed"):
     # ======================= EMAG ===============================
@@ -257,10 +179,9 @@ def emag_scraper(connection, cursor, link="https://www.emag.ro/laptopuri/brand/a
         for product in product_cards:
             product_title = product.find_element(By.CLASS_NAME, "card-v2-title").text
             product_offerprice = product.find_element(By.CLASS_NAME, "product-new-price").text
-
+            specs = extract_macbook_specs(product_title)
             # 1. Use Regex to find the number pattern (digits, dots, commas)
             match = re.search(r'[\d\.,]+', product_offerprice)
-
             if match:
                 raw_price = match.group(0)  # "11.699,99"
 
@@ -269,15 +190,22 @@ def emag_scraper(connection, cursor, link="https://www.emag.ro/laptopuri/brand/a
                 # Replace the decimal comma (11699,99 -> 11699.99)
                 product_offerprice = float(raw_price.replace('.', '').replace(',', '.'))
             product_fullprice = product.find_element(By.CLASS_NAME, "pricing").text
+            if "PRP" not in product_fullprice:
+                match = re.search(r'[\d\.,]+', product_fullprice)
+                if match:
+                    raw_price = match.group(0)
+                    product_fullprice = float(raw_price.replace('.', '').replace(',','.'))
+                    if specs["sealed"] == 1:
+                        sale = 1
+            else:
+                product_fullprice = product_offerprice
             product_link = product.find_element(By.CLASS_NAME, "card-v2-thumb").get_attribute("href")
             product_description = ""
             print(product_title)
-            # print(product_fullprice)
+            print(product_fullprice)
             print(product_offerprice)
             print(product_link)
             print("=========================")
-
-            specs = extract_macbook_specs(product_title)
 
             query = "SELECT id_model FROM model WHERE type = ? AND size = ? AND cpu = ? AND cpu_cores = ? AND gpu_cores = ? AND ram = ? AND storage = ? AND color = ? AND nano_texture = ?"
             cursor.execute(query, (specs['type'], specs['size'], specs['cpu'], specs['cpu_cores'], specs['gpu_cores'], specs['ram'], specs['storage'], specs['color'], specs['nano_texture'], ))
@@ -286,24 +214,24 @@ def emag_scraper(connection, cursor, link="https://www.emag.ro/laptopuri/brand/a
             if len(results) == 0:
                     query = "INSERT INTO model (type, title, size, cpu, cpu_cores, gpu_cores, ram, storage, color, nano_texture) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
                     cursor.execute(query, (specs['type'], product_title, specs['size'], specs['cpu'], specs['cpu_cores'], specs['gpu_cores'], specs['ram'], specs['storage'], specs['color'], specs['nano_texture'], ))
-                    query = "INSERT INTO product (id_model, link, price, platform, active, sealed, description) VALUES (?, ?, ?, ?, ?, ?, ?)"
-                    cursor.execute(query, (cursor.lastrowid, product_link, product_offerprice, 'EMAG', 1, 0, product_description))
+                    query = "INSERT INTO product (id_model, link, offer_price, full_price, platform, active, sealed, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                    cursor.execute(query, (cursor.lastrowid, product_link, product_offerprice, product_fullprice, 'EMAG', 1, 0, product_description))
                     connection.commit()
                     print("Produs inserat in MODEL si PRODUCT")
                     asyncio.run(alert_new(product_title, product_offerprice, product_link, 'EMAG'))
             else:
-                query = "SELECT * FROM product WHERE id_model = ? AND price = ?"
+                query = "SELECT * FROM product WHERE id_model = ? AND offer_price = ?"
                 cursor.execute(query, (results[0][0], product_offerprice, ))
                 connection.commit()
                 if cursor.fetchone() is None:
-                    query = "INSERT INTO product (id_model, link, price, platform, active, sealed, description) VALUES (?, ?, ?, ?, ?, ?, ?)"
-                    cursor.execute(query, (results[0][0], product_link, product_offerprice, 'EMAG', 1, 0, product_description))
+                    query = "INSERT INTO product (id_model, link, offer_price, full_price, platform, active, sealed, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                    cursor.execute(query, (results[0][0], product_link, product_offerprice, product_fullprice, 'EMAG', 1, 0, product_description))
                     connection.commit()
                     print("Produs inserat in PRODUCT")
                     asyncio.run(alert_new(product_title, product_offerprice, product_link, 'EMAG'))
                 else:
                     print("Produsul deja exista")
-                    query = "UPDATE product SET last_seen = datetime('now', 'localtime') WHERE id_model = ? AND price = ?"
+                    query = "UPDATE product SET last_seen = datetime('now', 'localtime') WHERE id_model = ? AND offer_price = ?"
                     cursor.execute(query, (results[0][0], product_offerprice, ))
                     connection.commit()
     except Exception as e:
@@ -315,16 +243,116 @@ def emag_scraper(connection, cursor, link="https://www.emag.ro/laptopuri/brand/a
 
     #checkDatabase(driver, cursor, "EMAG", connection, Macbooks)
 
+def get_emag_sealed():
+    link = "https://www.emag.ro/laptopuri/brand/apple/filter/emag-genius-f9538,livrate-de-emag-v30/c?ref=lst_leftbar_9538_30"
+
+    driver = webdriver.Chrome()
+    driver.get(link)
+    wait = WebDriverWait(driver, timeout=30)
+
+    page_number = 1
+    while True:
+        
+        try:
+            connection = sqlite3.connect('macbooks.db')
+            cursor = connection.cursor()
+
+            wait.until(EC.visibility_of_element_located((By.CLASS_NAME, "card-standard")))
+            product_cards = driver.find_elements(By.CLASS_NAME, "card-standard")
+
+            for product in product_cards:
+                sale = 0
+                active = 1
+                product_title = product.find_element(By.CLASS_NAME, "card-v2-title").text
+                specs = extract_macbook_specs(product_title)
+                product_offerprice = product.find_element(By.CLASS_NAME, "product-new-price").text
+                # 1. Use Regex to find the number pattern (digits, dots, commas)
+                match = re.search(r'[\d\.,]+', product_offerprice)
+                if match:
+                    raw_price = match.group(0)  # "11.699,99"
+                    # 2. Convert to a standard float for SQLite
+                    # Remove the thousands dot (11.699 -> 11699)
+                    # Replace the decimal comma (11699,99 -> 11699.99)
+                    product_offerprice = float(raw_price.replace('.', '').replace(',', '.'))
+                product_fullprice = product.find_element(By.CLASS_NAME, "pricing").text
+                if "PRP" not in product_fullprice:
+                    match = re.search(r'[\d\.,]+', product_fullprice)
+                    if match:
+                        raw_price = match.group(0)
+                        product_fullprice = float(raw_price.replace('.', '').replace(',','.'))
+                        if specs["sealed"] == 1:
+                            sale = 1
+                else:
+                    product_fullprice = product_offerprice
+                
+                try:
+                    if product.find_element(By.CLASS_NAME, "text-availability-out_of_stock"):
+                        print(product.find_element(By.CLASS_NAME, "text-availability-out_of_stock").text)
+                        active = 0
+                except NoSuchElementException:
+                    pass
+
+                product_link = product.find_element(By.CLASS_NAME, "card-v2-thumb").get_attribute("href")
+                product_description = ""
+                print(product_title)
+                print(product_fullprice)
+                print(product_offerprice)
+                print("sale:", sale)
+                print("sealed:", specs["sealed"])
+                print(product_link)
+
+                print("=========================\n")
+
+                query = "SELECT id_model FROM model WHERE type = ? AND size = ? AND cpu = ? AND cpu_cores = ? AND gpu_cores = ? AND ram = ? AND storage = ? AND color = ? AND nano_texture = ?"
+                cursor.execute(query, (specs['type'], specs['size'], specs['cpu'], specs['cpu_cores'], specs['gpu_cores'], specs['ram'], specs['storage'], specs['color'], specs['nano_texture'], ))
+                result = cursor.fetchone()
+
+                if result is None:
+                    query = "INSERT INTO MODEL (type, title, size, cpu, cpu_cores, gpu_cores, ram, storage, color, nano_texture, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    cursor.execute(query, (specs["type"], product_title, specs["size"], specs["cpu"], specs["cpu_cores"], specs["gpu_cores"], specs["ram"], specs["storage"], specs["color"], specs["nano_texture"], ))
+                    query = "INSERT INTO PRODUCT (id_model, link, full_price, offer_price, platform, active, sealed, sale) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                    cursor.execute(query, (cursor.lastrowid, product_link, product_fullprice, product_offerprice, "EMAG", active, 1, sale))
+                    connection.commit()
+                else:
+                    query = "SELECT full_price, sale, offer_price, active from product where id_model = ? and platform = ?"
+                    cursor.execute(query, (result[0], "EMAG"))
+                    product_result = cursor.fetchone()
+                    if product_result[0] != product_fullprice or product_result[1] != sale or product_result[2] != product_offerprice or product_result[3] != active:
+                        query = "UPDATE product " \
+                                "SET full_price = ?, sale = ?, offer_price = ?, active = ? " \
+                                "WHERE id_model = ? and sealed = 1"
+                        cursor.execute(query, (product_fullprice, sale, product_offerprice, active, result[0]))
+                        connection.commit()
+                    else:
+                        print("Datele sunt up-to-date")
+
+            WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a.js-change-page[aria-label='Next']")))
+            next_page_btn = driver.find_element(By.CSS_SELECTOR, "a.js-change-page[aria-label='Next']")
+            driver.execute_script("arguments[0].scrollIntoView();", next_page_btn)
+            driver.execute_script("window.scrollBy(0, -150);")
+            next_page_btn.click()
+            page_number += 1
+            #time.sleep(10)
+            WebDriverWait(driver, 10).until(EC.staleness_of(product_cards[0]))
+        except (TimeoutException, NoSuchElementException):
+            print("No more pages found")
+            driver.quit()
+            connection.close()
+            break
+        finally:
+            connection.close()
+
+
 total = 0
 
 
 
 def checkDBlastSeen (cursor, connection):
-    cursor.execute("SELECT p.platform, m.title, p.price, p.last_seen, p.id_model FROM product p JOIN model m ON p.id_model = m.id_model WHERE p.last_seen < ?", (script_start_time, ))
+    cursor.execute("SELECT p.platform, m.title, p.offer_price, p.last_seen, p.id_model FROM product p JOIN model m ON p.id_model = m.id_model WHERE p.last_seen < ? AND sealed = 0", (script_start_time, ))
     results = cursor.fetchall()
     for result in results:
         asyncio.run(alert_sold(result[1],result[2], result[0]))
-        cursor.execute("DELETE FROM product WHERE id_model = ? AND price = ?", (result[4], result[2], ))
+        cursor.execute("UPDATE product SET active = 0 WHERE id_model = ? AND offer_price = ?", (result[4], result[2], ))
     connection.commit()
 
 def setupDatabase():
@@ -350,7 +378,8 @@ def setupDatabase():
         id_product INTEGER PRIMARY KEY,
         id_model INTEGER NOT NULL,
         link TEXT NOT NULL,
-        price NUMERIC NOT NULL,
+        full_price NUMERIC,
+        offer_price NUMERIC NOT NULL,
         last_seen TEXT DEFAULT (datetime('now', 'localtime')),
         platform TEXT,
         active INTEGER check(active = 0 or active = 1),
@@ -495,6 +524,9 @@ except sqlite3.Error as error:
 finally:
     if connection:
        connection.close()
+
+get_emag_sealed()
+
 
 if connection:
     connection.close()
