@@ -3,7 +3,6 @@ from selenium.webdriver.common.by import By
 from selenium.webdriver.support import expected_conditions as EC
 from selenium.webdriver.support.wait import WebDriverWait
 from telegram.request import HTTPXRequest
-import datetime
 import sqlite3
 import re
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, StaleElementReferenceException
@@ -224,14 +223,17 @@ def emag_scraper(connection, cursor, link="https://www.emag.ro/laptopuri/brand/a
                 cursor.execute(query, (results[0][0], product_offerprice, ))
                 connection.commit()
                 if cursor.fetchone() is None:
-                    query = "INSERT INTO product (id_model, link, offer_price, full_price, platform, active, sealed, description) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
+                    query = ("INSERT INTO product (id_model, link, offer_price, full_price, platform, active, sealed, description)"
+                             " VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
                     cursor.execute(query, (results[0][0], product_link, product_offerprice, product_fullprice, 'EMAG', 1, 0, product_description))
                     connection.commit()
                     print("Produs inserat in PRODUCT")
                     asyncio.run(alert_new(product_title, product_offerprice, product_link, 'EMAG'))
                 else:
                     print("Produsul deja exista")
-                    query = "UPDATE product SET last_seen = datetime('now', 'localtime') WHERE id_model = ? AND offer_price = ?"
+                    query = ("UPDATE product "
+                             "SET last_seen = datetime('now', 'localtime') "
+                             "WHERE id_model = ? AND offer_price = ?")
                     cursor.execute(query, (results[0][0], product_offerprice, ))
                     connection.commit()
     except Exception as e:
@@ -308,7 +310,7 @@ def get_emag_sealed():
                 result = cursor.fetchone()
 
                 if result is None:
-                    query = "INSERT INTO MODEL (type, title, size, cpu, cpu_cores, gpu_cores, ram, storage, color, nano_texture, active) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    query = "INSERT INTO MODEL (type, title, size, cpu, cpu_cores, gpu_cores, ram, storage, color, nano_texture) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
                     cursor.execute(query, (specs["type"], product_title, specs["size"], specs["cpu"], specs["cpu_cores"], specs["gpu_cores"], specs["ram"], specs["storage"], specs["color"], specs["nano_texture"], ))
                     query = "INSERT INTO PRODUCT (id_model, link, full_price, offer_price, platform, active, sealed, sale) VALUES (?, ?, ?, ?, ?, ?, ?, ?)"
                     cursor.execute(query, (cursor.lastrowid, product_link, product_fullprice, product_offerprice, "EMAG", active, 1, sale))
@@ -324,7 +326,7 @@ def get_emag_sealed():
                         cursor.execute(query, (product_fullprice, sale, product_offerprice, active, result[0]))
                         connection.commit()
                     else:
-                        print("Datele sunt up-to-date")
+                        print("Data is up-to-date")
 
             WebDriverWait(driver, 5).until(EC.element_to_be_clickable((By.CSS_SELECTOR, "a.js-change-page[aria-label='Next']")))
             next_page_btn = driver.find_element(By.CSS_SELECTOR, "a.js-change-page[aria-label='Next']")
@@ -348,7 +350,7 @@ total = 0
 
 
 def checkDBlastSeen (cursor, connection):
-    cursor.execute("SELECT p.platform, m.title, p.offer_price, p.last_seen, p.id_model FROM product p JOIN model m ON p.id_model = m.id_model WHERE p.last_seen < ? AND sealed = 0", (script_start_time, ))
+    cursor.execute("SELECT p.platform, m.title, p.offer_price, p.last_seen, p.id_model FROM product p JOIN model m ON p.id_model = m.id_model WHERE p.last_seen < ? AND sealed = 0 AND active = 1", (script_start_time, ))
     results = cursor.fetchall()
     for result in results:
         asyncio.run(alert_sold(result[1],result[2], result[0]))
@@ -378,8 +380,7 @@ def setupDatabase():
         id_product INTEGER PRIMARY KEY,
         id_model INTEGER NOT NULL,
         link TEXT NOT NULL,
-        full_price NUMERIC,
-        offer_price NUMERIC NOT NULL,
+        price NUMERIC,
         last_seen TEXT DEFAULT (datetime('now', 'localtime')),
         platform TEXT,
         active INTEGER check(active = 0 or active = 1),
@@ -388,6 +389,18 @@ def setupDatabase():
         description TEXT,
 
         FOREIGN KEY (id_model) REFERENCES model(id_model)
+    )
+    ''')
+    cursor.execute('''
+                   CREATE TABLE IF NOT EXISTS price_history (
+    id_history INTEGER PRIMARY KEY AUTOINCREMENT,
+    id_product INTEGER NOT NULL,
+    full_price NUMERIC,      -- The base price / PRP at that moment
+    offer_price NUMERIC NOT NULL, -- The actual selling price at that moment
+    is_sale INTEGER CHECK(is_sale = 0 OR is_sale = 1), -- 1 if there was an active promotion
+    recorded_at TEXT DEFAULT (datetime('now', 'localtime')),
+    
+    FOREIGN KEY (id_product) REFERENCES product(id_product)
     )
     ''')
 
