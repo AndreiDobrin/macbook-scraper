@@ -12,8 +12,11 @@ It is meant as a helpful tool to make an educated decision on how to spend your 
 ## Architecture
 
 Scraper: Python, Selenium (Headless Chromium), SQLite, Telegram Bot
+
 Web Dashboard: .NET 10 Minimal API, HTML/JS, Chart.js, Bootstrap
+
 Infrastructure: Docker & Docker Compose
+
 
 ## Prerequisites
 
