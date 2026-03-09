@@ -1,6 +1,7 @@
 ## Introduction
 
-This is an automated scraper that fetches sealed and resealed macbooks from (currently) eMag and adds them to a database in order to check their prices.
+This is an automated scraper that fetches sealed and resealed macbooks from (currently) eMag and adds them to a database in order to check their prices. It checks prices every 2 hours.
+
 <img width="1920" height="1048" alt="image" src="https://github.com/user-attachments/assets/8cd2fe2e-782f-49a2-8855-d8984cc4b7c7" />
 
 
@@ -77,7 +78,13 @@ Check if containers are running:
 sudo docker compose ps
 ```
 
+
 Stop everything safely:
 ```Bash
 sudo docker compose down
 ```
+
+
+## Known Issues
+
+I have personally not had any issues with encountering captchas using Selenium with Chromium (although I did with BeautifulSoup). Since I have not had this issue, it was hard for me to build a system for it, so currently there is nothing in place to counteract or notify you if the website throws a captcha; the program will time out.
