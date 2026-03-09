@@ -20,7 +20,7 @@ Infrastructure: Docker & Docker Compose
 
 ## Prerequisites
 
-You need to have [Docker](https://docs.docker.com/engine/install/) and Docker Compose installed on your host machine.
+You need to have [Docker](https://docs.docker.com/engine/install/) and [Docker Compose](https://docs.docker.com/compose/) installed on your host machine.
 You also need a [Telegram bot](https://core.telegram.org/bots/tutorial) for phone notifications.
 
 ## Clone the Repository
