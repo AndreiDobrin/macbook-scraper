@@ -55,7 +55,7 @@ sudo docker compose up -d --build
 ## Access the Dashboard
 
 Once the containers are running, the web dashboard will be available at:
-http://<your-server-ip>:5000 (or http://localhost:5000 if running locally)
+http://your-server-ip:5000 (or http://localhost:5000 if running locally)
 
 
 ### Useful Docker Commands
