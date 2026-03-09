@@ -1,0 +1,30 @@
+# =========================
+# Secrets & Databases
+# =========================
+telegram_token.txt
+*.env
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# =========================
+# .NET / C#
+# =========================
+[Bb]in/
+[Oo]bj/
+appsettings.Development.json
+
+# =========================
+# Python
+# =========================
+venv/
+.venv/
+__pycache__/
+*.pyc
+
+# =========================
+# OS & Editor Files
+# =========================
+.vscode/
+.DS_Store

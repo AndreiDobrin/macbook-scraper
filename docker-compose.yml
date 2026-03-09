@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  scraper:
+    build: ./scraper
+    restart: unless-stopped
+    volumes:
+      - ./data:/data
+      - ./scraper:/app
+
+  web:
+    build: ./web
+    restart: unless-stopped
+    ports:
+      - "5000:8080"
+    volumes:
+      - ./data:/data

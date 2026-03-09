@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MacTracker Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .product-card { cursor: pointer; transition: transform 0.2s; }
+        .product-card:hover { transform: scale(1.02); border-color: #0d6efd; }
+        .inactive-card { opacity: 0.7; } /* Makes sold out items look slightly faded */
+    </style>
+</head>
+<body class="bg-light">
+
+<div class="container py-4">
+    <h1 class="mb-4">💻 MacTracker Dashboard</h1>
+
+    <div class="row g-2 mb-2 p-3 bg-white rounded-top shadow-sm border-bottom">
+        <div class="col-md-3">
+            <input type="text" id="searchInput" class="form-control" placeholder="Search (e.g. M3 Pro)">
+        </div>
+        <div class="col-md-2">
+            <select id="typeFilter" class="form-select">
+                <option value="">All Mac Types</option>
+                <option value="MacBook Pro">MacBook Pro</option>
+                <option value="MacBook Air">MacBook Air</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select id="statusFilter" class="form-select">
+                <option value="active">Active Only</option>
+                <option value="inactive">Sold Out</option>
+                <option value="all">Active & Sold Out</option>
+            </select>
+        </div>
+        <div class="col-md-2">
+            <select id="conditionFilter" class="form-select">
+                <option value="all">Any Condition</option>
+                <option value="sealed">New / Sealed</option>
+                <option value="unsealed">Resigilat</option>
+            </select>
+        </div>
+        <div class="col-md-1">
+            <input type="number" id="minPrice" class="form-control" placeholder="Min">
+        </div>
+        <div class="col-md-1">
+            <input type="number" id="maxPrice" class="form-control" placeholder="Max">
+        </div>
+        <div class="col-md-1">
+            <button class="btn btn-primary w-100" onclick="loadProducts()">Filter</button>
+        </div>
+    </div>
+
+    <div class="row g-2 mb-4 p-3 bg-white rounded-bottom shadow-sm">
+        <div class="col-md-6 d-flex align-items-center">
+            <span class="me-2 fw-bold text-muted small text-uppercase">RAM:</span>
+            <select id="ramOperator" class="form-select form-select-sm w-auto me-2">
+                <option value="gte">&ge; (At least)</option>
+                <option value="eq">= (Exact)</option>
+            </select>
+            <select id="ramValue" class="form-select form-select-sm">
+                <option value="">Any RAM</option>
+                <option value="8">8 GB</option>
+                <option value="16">16 GB</option>
+                <option value="18">18 GB</option>
+                <option value="24">24 GB</option>
+                <option value="32">32 GB</option>
+                <option value="36">36 GB</option>
+                <option value="48">48 GB</option>
+                <option value="64">64 GB</option>
+                <option value="96">96 GB</option>
+                <option value="128">128 GB</option>
+            </select>
+        </div>
+        
+        <div class="col-md-6 d-flex align-items-center">
+            <span class="me-2 fw-bold text-muted small text-uppercase">Storage:</span>
+            <select id="storageOperator" class="form-select form-select-sm w-auto me-2">
+                <option value="gte">&ge; (At least)</option>
+                <option value="eq">= (Exact)</option>
+            </select>
+            <select id="storageValue" class="form-select form-select-sm">
+                <option value="">Any Storage</option>
+                <option value="256">256 GB</option>
+                <option value="512">512 GB</option>
+                <option value="1024">1 TB</option>
+                <option value="2048">2 TB</option>
+                <option value="4096">4 TB</option>
+                <option value="8192">8 TB</option>
+            </select>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-7" style="height: 70vh; overflow-y: auto;" id="productList">
+            </div>
+
+        <div class="col-md-5">
+            <div class="bg-white p-3 rounded shadow-sm sticky-top" style="top: 20px;">
+                <h4 id="chartTitle">Select a Mac to view history</h4>
+                <canvas id="priceChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    let currentChart = null;
+
+    // Load products when page loads
+    document.addEventListener("DOMContentLoaded", loadProducts);
+
+    async function loadProducts() {
+        const search = document.getElementById('searchInput').value;
+        const minPrice = document.getElementById('minPrice').value;
+        const maxPrice = document.getElementById('maxPrice').value;
+        const type = document.getElementById('typeFilter').value;
+        const status = document.getElementById('statusFilter').value;
+        const condition = document.getElementById('conditionFilter').value;
+        
+        const ramOp = document.getElementById('ramOperator').value;
+        const ramVal = document.getElementById('ramValue').value;
+        
+        const storageOp = document.getElementById('storageOperator').value;
+        const storageVal = document.getElementById('storageValue').value;
+
+        let url = new URL('/api/products', window.location.origin);
+        
+        if (search) url.searchParams.append('search', search);
+        if (minPrice) url.searchParams.append('minPrice', minPrice);
+        if (maxPrice) url.searchParams.append('maxPrice', maxPrice);
+        if (type) url.searchParams.append('type', type);
+        if (status) url.searchParams.append('status', status);
+        if (condition) url.searchParams.append('condition', condition);
+        
+        if (ramVal) {
+            if (ramOp === 'gte') url.searchParams.append('minRam', ramVal);
+            if (ramOp === 'eq') url.searchParams.append('exactRam', ramVal);
+        }
+        
+        if (storageVal) {
+            if (storageOp === 'gte') url.searchParams.append('minStorage', storageVal);
+            if (storageOp === 'eq') url.searchParams.append('exactStorage', storageVal);
+        }
+
+        const response = await fetch(url);
+        const products = await response.json();
+        
+        const listContainer = document.getElementById('productList');
+        listContainer.innerHTML = '';
+
+        if (products.length === 0) {
+            listContainer.innerHTML = '<div class="alert alert-warning">No Macs found matching your criteria.</div>';
+            return;
+        }
+
+        products.forEach(p => {
+            // Dynamic styling based on database flags
+            const cardClass = p.active ? 'product-card' : 'product-card inactive-card bg-light';
+            const statusBadge = p.active ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-danger">Sold Out</span>';
+            const conditionBadge = p.sealed ? '<span class="badge bg-info text-dark">New/Sealed</span>' : '<span class="badge bg-warning text-dark">Resigilat</span>';
+            const dateStr = new Date(p.lastSeen.replace(" ", "T")).toLocaleDateString();
+
+            const card = document.createElement('div');
+            card.className = `card mb-3 shadow-sm ${cardClass}`;
+            card.onclick = () => loadHistory(p.id, p.title);
+            card.innerHTML = `
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-start mb-2">
+                        <h5 class="card-title mb-0 pe-2">${p.title}</h5>
+                        <h5 class="mb-0 text-primary text-nowrap">${p.price} RON</h5>
+                    </div>
+                    <div class="mb-2">
+                        ${statusBadge} ${conditionBadge} <span class="badge bg-secondary">${p.platform}</span>
+                    </div>
+                    <p class="text-muted small mb-2">${p.specs}</p>
+                    <div class="d-flex justify-content-between align-items-center mt-3 border-top pt-2">
+                        <small class="text-muted">Last seen: ${dateStr}</small>
+                        <a href="${p.link}" target="_blank" class="btn btn-sm ${p.active ? 'btn-outline-primary' : 'btn-outline-secondary disabled'}" onclick="event.stopPropagation()">
+                            ${p.active ? 'View on Store' : 'Link Dead'}
+                        </a>
+                    </div>
+                </div>
+            `;
+            listContainer.appendChild(card);
+        });
+    }
+
+async function loadHistory(id, title) {
+        const response = await fetch(`/api/products/${id}/history`);
+        const result = await response.json();
+        
+        const history = result.history;
+        const isSealed = result.isSealed;
+
+        // Change the chart title based on what data we are looking at
+        if (isSealed) {
+            document.getElementById('chartTitle').innerHTML = `<span class="badge bg-info text-dark mb-2">New/Sealed</span><br>${title}`;
+        } else {
+            document.getElementById('chartTitle').innerHTML = `<span class="badge bg-warning text-dark mb-2">Resigilat Market Trend</span><br><small class="text-muted">Lowest daily price for this model</small><br>${title}`;
+        }
+
+        const labels = history.map(h => new Date(h.date).toLocaleDateString());
+        const data = history.map(h => h.price);
+
+        if (currentChart) {
+            currentChart.destroy();
+        }
+
+        const ctx = document.getElementById('priceChart').getContext('2d');
+        currentChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: isSealed ? 'Listing Price (RON)' : 'Best Market Price (RON)',
+                    data: data,
+                    // Use a slightly different color to visually separate sealed vs unsealed trends
+                    borderColor: isSealed ? 'rgb(13, 202, 253)' : 'rgb(255, 193, 7)', 
+                    backgroundColor: isSealed ? 'rgba(13, 202, 253, 0.1)' : 'rgba(255, 193, 7, 0.1)',
+                    borderWidth: 2,
+                    fill: true,
+                    // Stepped looks great for specific products, smooth looks better for market trends
+                    stepped: isSealed, 
+                    tension: isSealed ? 0 : 0.2 
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: { beginAtZero: false }
+                }
+            }
+        });
+    }
+</script>
+</body>
+</html>
