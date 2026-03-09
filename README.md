@@ -21,7 +21,8 @@ Infrastructure: Docker & Docker Compose
 ## Prerequisites
 
 You need to have [Docker](https://docs.docker.com/engine/install/) and [Docker Compose](https://docs.docker.com/compose/) installed on your host machine.
-You also need a [Telegram bot](https://core.telegram.org/bots/tutorial) for phone notifications.
+You also need a [Telegram bot token](https://core.telegram.org/bots/tutorial) and your Telegram ID for phone notifications.
+You can get your personal Telegram ID by messaging @userinfobot
 
 ## Clone the Repository
 ```Bash
