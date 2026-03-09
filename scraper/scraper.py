@@ -9,10 +9,14 @@ import asyncio
 import telegram
 from selenium.common.exceptions import TimeoutException, NoSuchElementException, StaleElementReferenceException
 import time
+import os
 
-with open("telegram_token.txt", "r") as f:
-    telegram_token = f.readline()[:-1]
-    chat_token = f.readline()
+telegram_token = os.getenv("TELEGRAM_BOT_TOKEN")
+chat_token = os.getenv("TELEGRAM_CHAT_ID")
+
+if not telegram_token or not chat_token:
+    print("CRITICAL ERROR: Telegram credentials not found in environment!")
+    exit(1)
 
 def get_driver():
     options = webdriver.ChromeOptions()

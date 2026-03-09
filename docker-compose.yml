@@ -4,6 +4,8 @@ services:
   scraper:
     build: ./scraper
     restart: unless-stopped
+    env_file:
+      - .env
     volumes:
       - ./data:/data
       - ./scraper:/app
