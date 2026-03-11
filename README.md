@@ -27,7 +27,7 @@ You can get your personal Telegram ID by messaging @userinfobot
 ## Clone the Repository
 ```Bash
 git clone https://github.com/AndreiDobrin/macbook-scraper
-cd mactracker
+cd macbook-scraper
 ```
 
 ## Setup Environment Variables
