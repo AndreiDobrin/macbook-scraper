@@ -22,7 +22,8 @@ app.MapGet("/api/products", (
     int? exactStorage,
     string? type,
     string? status,     // "active", "inactive", or "all"
-    string? condition   // "sealed", "unsealed", or "all"
+    string? condition,  // "sealed", "unsealed", or "all"
+    string? category    // "Laptop", "Tablet", or null/all
     ) =>
 {
     var products = new List<object>();
@@ -33,7 +34,8 @@ app.MapGet("/api/products", (
     // Added p.active, p.sealed, and p.last_seen to the SELECT clause
     var query = @"
         SELECT p.id_product, m.title, p.current_price, p.platform, p.link, 
-               m.ram, m.storage, m.cpu, p.active, p.sealed, p.last_seen
+               m.ram, m.storage, m.cpu, p.active, p.sealed, p.last_seen,
+               m.category, m.connectivity
         FROM product p 
         JOIN model m ON p.id_model = m.id_model 
         WHERE 1=1 "; 
@@ -46,6 +48,7 @@ app.MapGet("/api/products", (
     if (condition == "sealed") query += " AND p.sealed = 1 ";
     else if (condition == "unsealed") query += " AND p.sealed = 0 ";
 
+    if (!string.IsNullOrEmpty(category)) query += " AND m.category = @category ";
     if (!string.IsNullOrEmpty(search)) query += " AND m.title LIKE @search ";
     if (minPrice.HasValue) query += " AND p.current_price >= @minPrice ";
     if (maxPrice.HasValue) query += " AND p.current_price <= @maxPrice ";
@@ -59,6 +62,7 @@ app.MapGet("/api/products", (
 
     using var command = new SqliteCommand(query, connection);
     
+    if (!string.IsNullOrEmpty(category)) command.Parameters.AddWithValue("@category", category);
     if (!string.IsNullOrEmpty(search)) command.Parameters.AddWithValue("@search", $"%{search}%");
     if (minPrice.HasValue) command.Parameters.AddWithValue("@minPrice", minPrice.Value);
     if (maxPrice.HasValue) command.Parameters.AddWithValue("@maxPrice", maxPrice.Value);
@@ -71,16 +75,27 @@ app.MapGet("/api/products", (
     using var reader = command.ExecuteReader();
     while (reader.Read())
     {
+        string categoryVal = reader.GetString(11);
+        string connectivityVal = reader.GetString(12);
+        string specs;
+        if (categoryVal == "Tablet") {
+             specs = $"{reader.GetString(7)} | {connectivityVal} | {reader.GetInt32(6)}GB";
+        } else {
+             specs = $"{reader.GetString(7)} | {reader.GetInt32(5)}GB RAM | {reader.GetInt32(6)}GB SSD";
+        }
+
         products.Add(new {
             Id = reader.GetInt32(0),
             Title = reader.GetString(1),
             Price = reader.IsDBNull(2) ? 0 : reader.GetDecimal(2),
             Platform = reader.GetString(3),
             Link = reader.GetString(4),
-            Specs = $"{reader.GetString(7)} | {reader.GetInt32(5)}GB RAM | {reader.GetInt32(6)}GB SSD",
+            Specs = specs,
             Active = reader.GetInt32(8) == 1,
             Sealed = reader.GetInt32(9) == 1,
-            LastSeen = reader.GetString(10)
+            LastSeen = reader.GetString(10),
+            Category = categoryVal,
+            Connectivity = connectivityVal
         });
     }
     return Results.Ok(products);
