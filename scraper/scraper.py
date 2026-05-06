@@ -7,6 +7,7 @@ import telegram
 from telegram.request import HTTPXRequest
 import time
 import os
+import random
 
 telegram_token = os.getenv("TELEGRAM_BOT_TOKEN")
 chat_token = os.getenv("TELEGRAM_CHAT_ID")
@@ -220,20 +221,37 @@ def setupDatabase():
 async def emag_scraper(page, connection, cursor, link="https://www.emag.ro/laptopuri/brand/apple/resigilate/c?ref=lst_leftbar_6407_resealed", is_ipad=False):
     print(f"Scraping link: {link}")
     try:
-        await page.goto(link, timeout=60000)
-        await page.wait_for_selector(".card-standard", timeout=30000)
+        # Human-like delay
+        await asyncio.sleep(random.uniform(2, 5))
+        
+        await page.goto(link, timeout=60000, wait_until="domcontentloaded")
+        
+        # Check for block
+        if "Robot" in await page.title() or await page.locator("text=Verify you are human").count() await page.locator("text=Verif").count() > 0:
+            print("CRITICAL: Blocked by bot protection!")
+            return
+
+        # Resilient wait
+        try:
+            await page.wait_for_selector(".card-standard", timeout=20000)
+        except:
+            print(f"No cards found on {link}. Maybe empty or layout changed.")
+            return
+
         product_cards = await page.locator(".card-standard").all()
 
         for product in product_cards:
             try:
                 title_elem = product.locator(".card-v2-title")
-                product_title = await title_elem.inner_text()
+                if await title_elem.count() == 0: continue
+                product_title = await title_elem.inner_text(timeout=5000)
                 
                 if is_ipad and "Apple" not in product_title and "iPad" not in product_title:
                     continue
 
                 price_elem = product.locator(".product-new-price")
-                product_offerprice_text = await price_elem.inner_text()
+                if await price_elem.count() == 0: continue
+                product_offerprice_text = await price_elem.inner_text(timeout=5000)
                 
                 specs = extract_ipad_specs(product_title) if is_ipad else extract_macbook_specs(product_title)
                 
@@ -245,9 +263,11 @@ async def emag_scraper(page, connection, cursor, link="https://www.emag.ro/lapto
                     continue
                     
                 pricing_elem = product.locator(".pricing")
-                product_fullprice_text = await pricing_elem.inner_text()
-                is_sale = 0
+                product_fullprice_text = "0"
+                if await pricing_elem.count() > 0:
+                    product_fullprice_text = await pricing_elem.inner_text(timeout=5000)
                 
+                is_sale = 0
                 if "PRP" not in product_fullprice_text:
                     match = re.search(r'[\d\.,]+', product_fullprice_text)
                     if match:
@@ -261,7 +281,8 @@ async def emag_scraper(page, connection, cursor, link="https://www.emag.ro/lapto
                     product_fullprice = product_offerprice
                     
                 link_elem = product.locator(".card-v2-thumb")
-                product_link = await link_elem.get_attribute("href")
+                if await link_elem.count() == 0: continue
+                product_link = await link_elem.get_attribute("href", timeout=5000)
                 
                 print(f"Found: {product_title} - {product_offerprice} RON")
 
@@ -311,28 +332,39 @@ async def emag_scraper(page, connection, cursor, link="https://www.emag.ro/lapto
 async def get_emag_sealed(page, connection, cursor, link="https://www.emag.ro/laptopuri/brand/apple/filter/emag-genius-f9538,livrate-de-emag-v30/c?ref=lst_leftbar_9538_30", is_ipad=False):
     print(f"Scraping sealed link: {link}")
     try:
-        await page.goto(link, timeout=60000)
+        await asyncio.sleep(random.uniform(2, 5))
+        await page.goto(link, timeout=60000, wait_until="domcontentloaded")
         
         while True:
-            await page.wait_for_selector(".card-standard", timeout=30000)
-            product_cards = await page.locator(".card-standard").all()
-            
-            if not product_cards:
+            # Check for block
+            if "Robot" in await page.title() or await page.locator("text=Verify you are human").count() > 0:
+                print("CRITICAL: Blocked by bot protection!")
+                return
+
+            try:
+                await page.wait_for_selector(".card-standard", timeout=20000)
+            except:
                 break
+
+            product_cards = await page.locator(".card-standard").all()
+            if not product_cards: break
 
             for product in product_cards:
                 try:
                     is_sale = 0
                     active = 1
+                    
                     title_elem = product.locator(".card-v2-title")
-                    product_title = await title_elem.inner_text()
+                    if await title_elem.count() == 0: continue
+                    product_title = await title_elem.inner_text(timeout=5000)
                     
                     if is_ipad and "Apple" not in product_title and "iPad" not in product_title:
                         continue
 
                     specs = extract_ipad_specs(product_title) if is_ipad else extract_macbook_specs(product_title)
                     price_elem = product.locator(".product-new-price")
-                    product_offerprice_text = await price_elem.inner_text()
+                    if await price_elem.count() == 0: continue
+                    product_offerprice_text = await price_elem.inner_text(timeout=5000)
                     
                     match = re.search(r'[\d\.,]+', product_offerprice_text)
                     if match:
@@ -342,7 +374,10 @@ async def get_emag_sealed(page, connection, cursor, link="https://www.emag.ro/la
                         continue
                     
                     pricing_elem = product.locator(".pricing")
-                    product_fullprice_text = await pricing_elem.inner_text()
+                    product_fullprice_text = "0"
+                    if await pricing_elem.count() > 0:
+                        product_fullprice_text = await pricing_elem.inner_text(timeout=5000)
+
                     if "PRP" not in product_fullprice_text:
                         match = re.search(r'[\d\.,]+', product_fullprice_text)
                         if match:
@@ -360,7 +395,8 @@ async def get_emag_sealed(page, connection, cursor, link="https://www.emag.ro/la
                         active = 0
 
                     link_elem = product.locator(".card-v2-thumb")
-                    product_link = await link_elem.get_attribute("href")
+                    if await link_elem.count() == 0: continue
+                    product_link = await link_elem.get_attribute("href", timeout=5000)
                     
                     query_model = "SELECT id_model FROM model WHERE type = ? AND size = ? AND cpu = ? AND cpu_cores = ? AND gpu_cores = ? AND ram = ? AND storage = ? AND color = ? AND nano_texture = ? AND category = ? AND connectivity = ?"
                     cursor.execute(query_model, (specs['type'], specs['size'], specs['cpu'], specs['cpu_cores'], specs['gpu_cores'], specs['ram'], specs['storage'], specs['color'], specs['nano_texture'], specs['category'], specs['connectivity']))
@@ -403,10 +439,11 @@ async def get_emag_sealed(page, connection, cursor, link="https://www.emag.ro/la
                 if await next_page_btn.count() > 0 and await next_page_btn.is_visible():
                     await next_page_btn.scroll_into_view_if_needed()
                     await next_page_btn.click()
-                    await page.wait_for_load_state("networkidle")
+                    await page.wait_for_load_state("domcontentloaded")
+                    await asyncio.sleep(random.uniform(1, 3))
                 else:
                     break
-            except Exception:
+            except:
                 break
 
     except Exception as e:
@@ -440,7 +477,7 @@ async def run_scrape_cycle():
     ipad_sealed_link = "https://www.emag.ro/tablete/stoc/filter/producator-procesor-f7884,apple-v-4875704/c?ref=lst_leftbar_6407_stock"
 
     async with async_playwright() as p:
-        browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
+        browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage", "--disable-blink-features=AutomationControlled"])
         context = await browser.new_context(
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
             viewport={"width": 1920, "height": 1080}
