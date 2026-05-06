@@ -1,18 +1,13 @@
-FROM python:3.11-slim
-
-# Install system dependencies needed for Playwright installation
-RUN apt-get update && apt-get install -y \
-    wget \
-    gnupg \
-    && rm -rf /var/lib/apt/lists/*
+FROM mcr.microsoft.com/playwright/python:v1.40.0-jammy
 
 WORKDIR /app
 
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Install Playwright browsers and their system dependencies
-RUN playwright install chromium --with-deps
+# Playwright browsers are pre-installed in this image, 
+# but we ensure the correct ones are available for the version in requirements.txt
+RUN playwright install chromium
 
 COPY scraper.py .
 
