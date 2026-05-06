@@ -152,8 +152,6 @@ app.MapDelete("/api/notifications/{id}", (int id) => {
     return Results.Ok();
 });
 
-public record NotificationRule(string? Category, string? Type, int? MinRam, int? MinStorage, decimal? MaxPrice, string? Condition);
-
 // Endpoint 2: Get Price History (Smart branching for Sealed vs Unsealed)
 app.MapGet("/api/products/{id}/history", (int id) =>
 {
@@ -220,3 +218,5 @@ app.MapGet("/api/products/{id}/history", (int id) =>
 });
 
 app.Run();
+
+public record NotificationRule(string? Category, string? Type, int? MinRam, int? MinStorage, decimal? MaxPrice, string? Condition);
