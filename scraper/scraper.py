@@ -1,13 +1,10 @@
-from selenium import webdriver
-from selenium.webdriver.common.by import By
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.support.wait import WebDriverWait
-from telegram.request import HTTPXRequest
+from playwright.async_api import async_playwright
+from playwright_stealth import stealth_async
 import sqlite3
 import re
 import asyncio
 import telegram
-from selenium.common.exceptions import TimeoutException, NoSuchElementException, StaleElementReferenceException
+from telegram.request import HTTPXRequest
 import time
 import os
 
@@ -18,28 +15,17 @@ if not telegram_token or not chat_token:
     print("CRITICAL ERROR: Telegram credentials not found in environment!")
     exit(1)
 
-def get_driver():
-    options = webdriver.ChromeOptions()
-    options.add_argument('--headless=new')
-    options.add_argument('--no-sandbox')
-    options.add_argument('--disable-dev-shm-usage')
-    options.add_argument('--disable-gpu')
-    options.add_argument('--window-size=1920,1080')
-    # Use a modern user agent to avoid being blocked
-    options.add_argument('user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36')
-    return webdriver.Chrome(options=options)
-
 async def alert_new(titlu, pret_oferta, link, platforma, pret_intreg="Necunoscut"):
     longer_request = HTTPXRequest(connect_timeout=30, read_timeout=30)
     bot = telegram.Bot(token=telegram_token, request=longer_request)
     async with bot:
-        await bot.send_message(text=f"Produs nou pe {platforma}\n{titlu}\nPret intreg: {pret_intreg}\nPret oferta: {pret_oferta}\n{link}", chat_id = chat_token)
+        await bot.send_message(text=f"Produs nou pe {platforma}\n{titlu}\nPret intreg: {pret_intreg}\nPret oferta: {pret_oferta}\n{link}", chat_id=chat_token)
 
 async def alert_sold(titlu, pret_oferta, platforma, pret_intreg="Necunoscut"):
     longer_request = HTTPXRequest(connect_timeout=30, read_timeout=30)
     bot = telegram.Bot(token=telegram_token, request=longer_request)
     async with bot:
-        await bot.send_message(text=f"Produs vandut pe {platforma}\n{titlu}\nPret intreg: {pret_intreg}\nPret oferta: {pret_oferta}", chat_id = chat_token)
+        await bot.send_message(text=f"Produs vandut pe {platforma}\n{titlu}\nPret intreg: {pret_intreg}\nPret oferta: {pret_oferta}", chat_id=chat_token)
 
 def extract_macbook_specs(title):
     clean_title = " ".join(title.split())
@@ -129,34 +115,29 @@ def extract_ipad_specs(title):
     elif "iPad" in clean_title:
         specs["type"] = "iPad"
 
-    # Size: e.g. 11", 13", 10.9", 12.9"
     size_match = re.search(r'(\d+(\.\d+)?)(?="|\s*-inch|-inch)', clean_title)
     if size_match:
         specs["size"] = float(size_match.group(1))
 
-    # CPU: M4, M2, M1, A14, etc.
     cpu_match = re.search(r'(M\d|A\d+\s*Pro|A\d+)', clean_title)
     if cpu_match:
         specs["cpu"] = cpu_match.group(1)
 
-    # Connectivity
     if "Wi-Fi + Cellular" in clean_title or "Cellular" in clean_title:
         specs["connectivity"] = "Wi-Fi + Cellular"
     else:
         specs["connectivity"] = "Wi-Fi"
 
-    # Storage
     memory_matches = re.findall(r'(\d+)\s*(GB|TB)', clean_title)
     for amount, unit in memory_matches:
         amount = int(amount)
         if unit == "TB":
             specs["storage"] = amount * 1024
         elif unit == "GB":
-            if amount >= 32: # Storage is usually >= 32GB for iPads
+            if amount >= 32:
                 specs["storage"] = amount
 
-    # Color
-    known_colors = ["Silver", "Space Grey", "Space Gray", "Midnight", "Starlight", "Space Black", "Purple", "Blue", "Pink", "Yellow", "Space Grey", "Space Gray"]
+    known_colors = ["Silver", "Space Grey", "Space Gray", "Midnight", "Starlight", "Space Black", "Purple", "Blue", "Pink", "Yellow"]
     for color in known_colors:
         if color.lower() in clean_title.lower():
             specs["color"] = color
@@ -171,7 +152,6 @@ def setupDatabase():
     connection = sqlite3.connect('/data/macbooks.db')
     cursor = connection.cursor()
     
-
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS model (
         id_model INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -190,7 +170,6 @@ def setupDatabase():
     )
     ''')
 
-    # Migration: Add columns if they don't exist
     cursor.execute("PRAGMA table_info(model)")
     columns = [column[1] for column in cursor.fetchall()]
     if 'category' not in columns:
@@ -198,15 +177,12 @@ def setupDatabase():
     if 'connectivity' not in columns:
         cursor.execute("ALTER TABLE model ADD COLUMN connectivity TEXT DEFAULT 'N/A'")
     
-    connection.commit()
-    
-
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS product (
         id_product INTEGER PRIMARY KEY AUTOINCREMENT,
         id_model INTEGER NOT NULL,
         link TEXT NOT NULL UNIQUE,
-        current_price NUMERIC,  -- Cached for fast website sorting/filtering
+        current_price NUMERIC,
         last_seen TEXT DEFAULT (datetime('now', 'localtime')),
         platform TEXT,
         active INTEGER check(active = 0 or active = 1),
@@ -216,7 +192,6 @@ def setupDatabase():
     )
     ''')
     
-
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS price_history (
         id_history INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -228,7 +203,6 @@ def setupDatabase():
         FOREIGN KEY (id_product) REFERENCES product(id_product)
     )
     ''')
-
 
     cursor.execute('''
     CREATE TRIGGER IF NOT EXISTS update_current_price 
@@ -243,136 +217,134 @@ def setupDatabase():
     connection.commit()
     connection.close()
 
-def emag_scraper(connection, cursor, link="https://www.emag.ro/laptopuri/brand/apple/resigilate/c?ref=lst_leftbar_6407_resealed", is_ipad=False):
-    driver = None
+async def emag_scraper(page, connection, cursor, link="https://www.emag.ro/laptopuri/brand/apple/resigilate/c?ref=lst_leftbar_6407_resealed", is_ipad=False):
+    print(f"Scraping link: {link}")
     try:
-        driver = get_driver()
-        driver.get(link)
-        wait = WebDriverWait(driver, timeout=30)
-
-        wait.until(EC.visibility_of_element_located((By.CLASS_NAME, "card-standard")))
-        product_cards = driver.find_elements(By.CLASS_NAME, "card-standard")
+        await page.goto(link, timeout=60000)
+        await page.wait_for_selector(".card-standard", timeout=30000)
+        product_cards = await page.locator(".card-standard").all()
 
         for product in product_cards:
-            product_title = product.find_element(By.CLASS_NAME, "card-v2-title").text
-            
-            # Skip non-Apple tablets for iPad sealed link
-            if is_ipad and "Apple" not in product_title and "iPad" not in product_title:
-                continue
-
-            product_offerprice_elem = product.find_element(By.CLASS_NAME, "product-new-price").text
-            specs = extract_ipad_specs(product_title) if is_ipad else extract_macbook_specs(product_title)
-            
-            match = re.search(r'[\d\.,]+', product_offerprice_elem)
-            if match:
-                raw_price = match.group(0) 
-                product_offerprice = float(raw_price.replace('.', '').replace(',', '.'))
-            else:
-                continue
+            try:
+                title_elem = product.locator(".card-v2-title")
+                product_title = await title_elem.inner_text()
                 
-            product_fullprice_elem = product.find_element(By.CLASS_NAME, "pricing").text
-            is_sale = 0
-            
-            if "PRP" not in product_fullprice_elem:
-                match = re.search(r'[\d\.,]+', product_fullprice_elem)
+                if is_ipad and "Apple" not in product_title and "iPad" not in product_title:
+                    continue
+
+                price_elem = product.locator(".product-new-price")
+                product_offerprice_text = await price_elem.inner_text()
+                
+                specs = extract_ipad_specs(product_title) if is_ipad else extract_macbook_specs(product_title)
+                
+                match = re.search(r'[\d\.,]+', product_offerprice_text)
                 if match:
-                    raw_price = match.group(0)
-                    product_fullprice = float(raw_price.replace('.', '').replace(',','.'))
-                    if specs["sealed"] == 1:
-                        is_sale = 1
+                    raw_price = match.group(0) 
+                    product_offerprice = float(raw_price.replace('.', '').replace(',', '.'))
+                else:
+                    continue
+                    
+                pricing_elem = product.locator(".pricing")
+                product_fullprice_text = await pricing_elem.inner_text()
+                is_sale = 0
+                
+                if "PRP" not in product_fullprice_text:
+                    match = re.search(r'[\d\.,]+', product_fullprice_text)
+                    if match:
+                        raw_price = match.group(0)
+                        product_fullprice = float(raw_price.replace('.', '').replace(',','.'))
+                        if specs["sealed"] == 1:
+                            is_sale = 1
+                    else:
+                        product_fullprice = product_offerprice
                 else:
                     product_fullprice = product_offerprice
-            else:
-                product_fullprice = product_offerprice
-                
-            product_link = product.find_element(By.CLASS_NAME, "card-v2-thumb").get_attribute("href")
-            product_description = ""
-            
-            print(f"Found: {product_title} - {product_offerprice} RON")
-
-            query_model = "SELECT id_model FROM model WHERE type = ? AND size = ? AND cpu = ? AND cpu_cores = ? AND gpu_cores = ? AND ram = ? AND storage = ? AND color = ? AND nano_texture = ? AND category = ? AND connectivity = ?"
-            cursor.execute(query_model, (specs['type'], specs['size'], specs['cpu'], specs['cpu_cores'], specs['gpu_cores'], specs['ram'], specs['storage'], specs['color'], specs['nano_texture'], specs['category'], specs['connectivity']))
-            model_result = cursor.fetchone()
-            
-            if model_result is None:
-                query_insert_model = "INSERT INTO model (type, title, size, cpu, cpu_cores, gpu_cores, ram, storage, color, nano_texture, category, connectivity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
-                cursor.execute(query_insert_model, (specs['type'], product_title, specs['size'], specs['cpu'], specs['cpu_cores'], specs['gpu_cores'], specs['ram'], specs['storage'], specs['color'], specs['nano_texture'], specs['category'], specs['connectivity']))
-                id_model = cursor.lastrowid
-            else:
-                id_model = model_result[0]
-
-            cursor.execute("SELECT id_product FROM product WHERE link = ?", (product_link,))
-            product_result = cursor.fetchone()
-
-            if product_result is None:
-                query_insert_product = "INSERT INTO product (id_model, link, platform, active, sealed, description) VALUES (?, ?, ?, ?, ?, ?)"
-                cursor.execute(query_insert_product, (id_model, product_link, 'EMAG', 1, specs['sealed'], product_description))
-                id_product = cursor.lastrowid
-                
-                cursor.execute("INSERT INTO price_history (id_product, full_price, offer_price, is_sale) VALUES (?, ?, ?, ?)", (id_product, product_fullprice, product_offerprice, is_sale))
-                connection.commit()
-                
-                print(f"New product: {product_title}")
-                asyncio.run(alert_new(product_title, product_offerprice, product_link, 'EMAG', product_fullprice))
-            else:
-                id_product = product_result[0]
-                cursor.execute("UPDATE product SET last_seen = datetime('now', 'localtime'), active = 1 WHERE id_product = ?", (id_product,))
-                
-                cursor.execute("SELECT offer_price, full_price FROM price_history WHERE id_product = ? ORDER BY recorded_at DESC LIMIT 1", (id_product,))
-                latest_price = cursor.fetchone()
-                
-                if latest_price is None or latest_price[0] != product_offerprice or latest_price[1] != product_fullprice:
-                    cursor.execute("INSERT INTO price_history (id_product, full_price, offer_price, is_sale) VALUES (?, ?, ?, ?)", (id_product, product_fullprice, product_offerprice, is_sale))
-                    print(f"Price update for: {product_title}")
                     
-                connection.commit()
+                link_elem = product.locator(".card-v2-thumb")
+                product_link = await link_elem.get_attribute("href")
+                
+                print(f"Found: {product_title} - {product_offerprice} RON")
+
+                query_model = "SELECT id_model FROM model WHERE type = ? AND size = ? AND cpu = ? AND cpu_cores = ? AND gpu_cores = ? AND ram = ? AND storage = ? AND color = ? AND nano_texture = ? AND category = ? AND connectivity = ?"
+                cursor.execute(query_model, (specs['type'], specs['size'], specs['cpu'], specs['cpu_cores'], specs['gpu_cores'], specs['ram'], specs['storage'], specs['color'], specs['nano_texture'], specs['category'], specs['connectivity']))
+                model_result = cursor.fetchone()
+                
+                if model_result is None:
+                    query_insert_model = "INSERT INTO model (type, title, size, cpu, cpu_cores, gpu_cores, ram, storage, color, nano_texture, category, connectivity) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+                    cursor.execute(query_insert_model, (specs['type'], product_title, specs['size'], specs['cpu'], specs['cpu_cores'], specs['gpu_cores'], specs['ram'], specs['storage'], specs['color'], specs['nano_texture'], specs['category'], specs['connectivity']))
+                    id_model = cursor.lastrowid
+                else:
+                    id_model = model_result[0]
+
+                cursor.execute("SELECT id_product FROM product WHERE link = ?", (product_link,))
+                product_result = cursor.fetchone()
+
+                if product_result is None:
+                    query_insert_product = "INSERT INTO product (id_model, link, platform, active, sealed, description) VALUES (?, ?, ?, ?, ?, ?)"
+                    cursor.execute(query_insert_product, (id_model, product_link, 'EMAG', 1, specs['sealed'], ""))
+                    id_product = cursor.lastrowid
+                    
+                    cursor.execute("INSERT INTO price_history (id_product, full_price, offer_price, is_sale) VALUES (?, ?, ?, ?)", (id_product, product_fullprice, product_offerprice, is_sale))
+                    connection.commit()
+                    
+                    print(f"New product: {product_title}")
+                    await alert_new(product_title, product_offerprice, product_link, 'EMAG', product_fullprice)
+                else:
+                    id_product = product_result[0]
+                    cursor.execute("UPDATE product SET last_seen = datetime('now', 'localtime'), active = 1 WHERE id_product = ?", (id_product,))
+                    
+                    cursor.execute("SELECT offer_price, full_price FROM price_history WHERE id_product = ? ORDER BY recorded_at DESC LIMIT 1", (id_product,))
+                    latest_price = cursor.fetchone()
+                    
+                    if latest_price is None or latest_price[0] != product_offerprice or latest_price[1] != product_fullprice:
+                        cursor.execute("INSERT INTO price_history (id_product, full_price, offer_price, is_sale) VALUES (?, ?, ?, ?)", (id_product, product_fullprice, product_offerprice, is_sale))
+                        print(f"Price update for: {product_title}")
+                        
+                    connection.commit()
+            except Exception as e:
+                print(f"Error processing product card: {e}")
+                continue
 
     except Exception as e:
-        print(f"Error in emag_scraper for {link}:", e)
-    finally:
-        if driver:
-            driver.quit()
+        print(f"Error in emag_scraper for {link}: {e}")
 
-def get_emag_sealed(link="https://www.emag.ro/laptopuri/brand/apple/filter/emag-genius-f9538,livrate-de-emag-v30/c?ref=lst_leftbar_9538_30", is_ipad=False):
-    driver = None
+async def get_emag_sealed(page, connection, cursor, link="https://www.emag.ro/laptopuri/brand/apple/filter/emag-genius-f9538,livrate-de-emag-v30/c?ref=lst_leftbar_9538_30", is_ipad=False):
+    print(f"Scraping sealed link: {link}")
     try:
-        driver = get_driver()
-        driver.get(link)
-        wait = WebDriverWait(driver, timeout=30)
-
+        await page.goto(link, timeout=60000)
+        
         while True:
-            connection = None
-            try:
-                connection = sqlite3.connect('/data/macbooks.db')
-                cursor = connection.cursor()
+            await page.wait_for_selector(".card-standard", timeout=30000)
+            product_cards = await page.locator(".card-standard").all()
+            
+            if not product_cards:
+                break
 
-                wait.until(EC.visibility_of_element_located((By.CLASS_NAME, "card-standard")))
-                product_cards = driver.find_elements(By.CLASS_NAME, "card-standard")
-
-                if not product_cards:
-                    break
-
-                for product in product_cards:
+            for product in product_cards:
+                try:
                     is_sale = 0
                     active = 1
-                    product_title = product.find_element(By.CLASS_NAME, "card-v2-title").text
+                    title_elem = product.locator(".card-v2-title")
+                    product_title = await title_elem.inner_text()
                     
                     if is_ipad and "Apple" not in product_title and "iPad" not in product_title:
                         continue
 
                     specs = extract_ipad_specs(product_title) if is_ipad else extract_macbook_specs(product_title)
-                    product_offerprice_elem = product.find_element(By.CLASS_NAME, "product-new-price").text
+                    price_elem = product.locator(".product-new-price")
+                    product_offerprice_text = await price_elem.inner_text()
                     
-                    match = re.search(r'[\d\.,]+', product_offerprice_elem)
+                    match = re.search(r'[\d\.,]+', product_offerprice_text)
                     if match:
                         raw_price = match.group(0) 
                         product_offerprice = float(raw_price.replace('.', '').replace(',', '.'))
                     else:
                         continue
                     
-                    product_fullprice_elem = product.find_element(By.CLASS_NAME, "pricing").text
-                    if "PRP" not in product_fullprice_elem:
-                        match = re.search(r'[\d\.,]+', product_fullprice_elem)
+                    pricing_elem = product.locator(".pricing")
+                    product_fullprice_text = await pricing_elem.inner_text()
+                    if "PRP" not in product_fullprice_text:
+                        match = re.search(r'[\d\.,]+', product_fullprice_text)
                         if match:
                             raw_price = match.group(0)
                             product_fullprice = float(raw_price.replace('.', '').replace(',','.'))
@@ -383,13 +355,12 @@ def get_emag_sealed(link="https://www.emag.ro/laptopuri/brand/apple/filter/emag-
                     else:
                         product_fullprice = product_offerprice
                     
-                    try:
-                        if product.find_element(By.CLASS_NAME, "text-availability-out_of_stock"):
-                            active = 0
-                    except NoSuchElementException:
-                        pass
+                    stock_elem = product.locator(".text-availability-out_of_stock")
+                    if await stock_elem.count() > 0:
+                        active = 0
 
-                    product_link = product.find_element(By.CLASS_NAME, "card-v2-thumb").get_attribute("href")
+                    link_elem = product.locator(".card-v2-thumb")
+                    product_link = await link_elem.get_attribute("href")
                     
                     query_model = "SELECT id_model FROM model WHERE type = ? AND size = ? AND cpu = ? AND cpu_cores = ? AND gpu_cores = ? AND ram = ? AND storage = ? AND color = ? AND nano_texture = ? AND category = ? AND connectivity = ?"
                     cursor.execute(query_model, (specs['type'], specs['size'], specs['cpu'], specs['cpu_cores'], specs['gpu_cores'], specs['ram'], specs['storage'], specs['color'], specs['nano_texture'], specs['category'], specs['connectivity']))
@@ -423,30 +394,25 @@ def get_emag_sealed(link="https://www.emag.ro/laptopuri/brand/apple/filter/emag-
                             cursor.execute("INSERT INTO price_history (id_product, full_price, offer_price, is_sale) VALUES (?, ?, ?, ?)", (id_product, product_fullprice, product_offerprice, is_sale))
                             
                         connection.commit()
+                except Exception as e:
+                    print(f"Error processing sealed product card: {e}")
+                    continue
 
-                try:
-                    next_page_btn = driver.find_element(By.CSS_SELECTOR, "a.js-change-page[aria-label='Next']")
-                    driver.execute_script("arguments[0].scrollIntoView();", next_page_btn)
-                    driver.execute_script("window.scrollBy(0, -150);")
-                    next_page_btn.click()
-                    WebDriverWait(driver, 10).until(EC.staleness_of(product_cards[0]))
-                except (NoSuchElementException, TimeoutException):
+            try:
+                next_page_btn = page.locator("a.js-change-page[aria-label='Next']")
+                if await next_page_btn.count() > 0 and await next_page_btn.is_visible():
+                    await next_page_btn.scroll_into_view_if_needed()
+                    await next_page_btn.click()
+                    await page.wait_for_load_state("networkidle")
+                else:
                     break
-
-            except Exception as e:
-                print(f"Error in cycle for {link}:", e)
+            except Exception:
                 break
-            finally:
-                if connection:
-                    connection.close()
-    
-    except Exception as e:
-        print(f"Critical error in get_emag_sealed for {link}:", e)
-    finally:
-        if driver:
-            driver.quit()
 
-def checkDBlastSeen(cursor, connection, script_start_time):
+    except Exception as e:
+        print(f"Error in get_emag_sealed for {link}: {e}")
+
+async def checkDBlastSeen(cursor, connection, script_start_time):
     query = '''
         SELECT p.platform, m.title, 
                (SELECT offer_price FROM price_history WHERE id_product = p.id_product ORDER BY recorded_at DESC LIMIT 1), 
@@ -464,41 +430,53 @@ def checkDBlastSeen(cursor, connection, script_start_time):
         offer_price = result[2]
         id_product = result[3]
         
-        asyncio.run(alert_sold(title, offer_price, platform))
+        await alert_sold(title, offer_price, platform)
         cursor.execute("UPDATE product SET active = 0 WHERE id_product = ?", (id_product, ))
         
     connection.commit()
 
-if __name__ == "__main__":
-    setupDatabase()
-
+async def run_scrape_cycle():
     ipad_resealed_link = "https://www.emag.ro/tablete/resigilate/filter/producator-procesor-f7884,apple-v-4875704/c?ref=lst_leftbar_6407_resealed"
     ipad_sealed_link = "https://www.emag.ro/tablete/stoc/filter/producator-procesor-f7884,apple-v-4875704/c?ref=lst_leftbar_6407_stock"
 
-    while True:
-        print("Starting scrape cycle...")
-        try:
-            connection = sqlite3.connect('/data/macbooks.db')
-            cursor = connection.cursor()
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--no-sandbox", "--disable-dev-shm-usage"])
+        context = await browser.new_context(
+            user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            viewport={"width": 1920, "height": 1080}
+        )
+        page = await context.new_page()
+        await stealth_async(page)
 
-            cursor.execute("SELECT datetime('now', 'localtime')")
-            script_start_time = cursor.fetchone()[0]
+        while True:
+            print("Starting scrape cycle...")
+            connection = None
+            try:
+                connection = sqlite3.connect('/data/macbooks.db')
+                cursor = connection.cursor()
 
-            # MacBooks
-            emag_scraper(connection, cursor)
-            get_emag_sealed()
+                cursor.execute("SELECT datetime('now', 'localtime')")
+                script_start_time = cursor.fetchone()[0]
 
-            # iPads
-            emag_scraper(connection, cursor, link=ipad_resealed_link, is_ipad=True)
-            get_emag_sealed(link=ipad_sealed_link, is_ipad=True)
+                # MacBooks
+                await emag_scraper(page, connection, cursor)
+                await get_emag_sealed(page, connection, cursor)
 
-            checkDBlastSeen(cursor, connection, script_start_time)
+                # iPads
+                await emag_scraper(page, connection, cursor, link=ipad_resealed_link, is_ipad=True)
+                await get_emag_sealed(page, connection, cursor, link=ipad_sealed_link, is_ipad=True)
 
-        except Exception as e:
-            print("Error during scrape:", e)
-        finally:
-            if connection:
-                connection.close()
+                await checkDBlastSeen(cursor, connection, script_start_time)
 
-        print("Cycle complete. Sleeping for 2 hours...")
-        time.sleep(7200)
+            except Exception as e:
+                print("Error during scrape cycle:", e)
+            finally:
+                if connection:
+                    connection.close()
+
+            print("Cycle complete. Sleeping for 2 hours...")
+            await asyncio.sleep(7200)
+
+if __name__ == "__main__":
+    setupDatabase()
+    asyncio.run(run_scrape_cycle())
