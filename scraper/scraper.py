@@ -22,6 +22,35 @@ async def alert_new(titlu, pret_oferta, link, platforma, pret_intreg="Necunoscut
     async with bot:
         await bot.send_message(text=f"Produs nou pe {platforma}\n{titlu}\nPret intreg: {pret_intreg}\nPret oferta: {pret_oferta}\n{link}", chat_id=chat_token)
 
+async def should_send_alert(cursor, specs, price):
+    cursor.execute("SELECT category, type, min_ram, min_storage, max_price, condition FROM notification_filter WHERE active = 1")
+    filters = cursor.fetchall()
+    
+    # If no filters exist, send all alerts (default behavior)
+    if not filters:
+        return True
+        
+    for f_category, f_type, f_min_ram, f_min_storage, f_max_price, f_condition in filters:
+        match = True
+        
+        if f_category and f_category != specs['category']: match = False
+        if f_type and f_type != specs['type']: match = False
+        
+        try:
+            if f_min_ram and specs['ram'] != 'N/A' and int(specs['ram']) < f_min_ram: match = False
+            if f_min_storage and specs['storage'] != 'N/A' and int(specs['storage']) < f_min_storage: match = False
+        except (ValueError, TypeError):
+            pass # Keep match=True if conversion fails, or could set match=False
+            
+        if f_max_price and price > f_max_price: match = False
+        
+        if f_condition == 'sealed' and specs['sealed'] == 0: match = False
+        if f_condition == 'unsealed' and specs['sealed'] == 1: match = False
+        
+        if match: return True
+        
+    return False
+
 async def alert_sold(titlu, pret_oferta, platforma, pret_intreg="Necunoscut"):
     longer_request = HTTPXRequest(connect_timeout=30, read_timeout=30)
     bot = telegram.Bot(token=telegram_token, request=longer_request)
@@ -184,6 +213,7 @@ def setupDatabase():
         id_model INTEGER NOT NULL,
         link TEXT NOT NULL UNIQUE,
         current_price NUMERIC,
+        full_price NUMERIC,
         last_seen TEXT DEFAULT (datetime('now', 'localtime')),
         platform TEXT,
         active INTEGER check(active = 0 or active = 1),
@@ -192,7 +222,26 @@ def setupDatabase():
         FOREIGN KEY (id_model) REFERENCES model(id_model)
     )
     ''')
-    
+
+    # Migration for full_price
+    cursor.execute("PRAGMA table_info(product)")
+    product_columns = [column[1] for column in cursor.fetchall()]
+    if 'full_price' not in product_columns:
+        cursor.execute("ALTER TABLE product ADD COLUMN full_price NUMERIC")
+
+    cursor.execute('''
+    CREATE TABLE IF NOT EXISTS notification_filter (
+        id_filter INTEGER PRIMARY KEY AUTOINCREMENT,
+        category TEXT,    -- Laptop / Tablet
+        type TEXT,        -- MacBook Pro, iPad Air, etc.
+        min_ram INTEGER,
+        min_storage INTEGER,
+        max_price NUMERIC,
+        condition TEXT,   -- sealed / unsealed / all
+        active INTEGER DEFAULT 1
+    )
+    ''')
+
     cursor.execute('''
     CREATE TABLE IF NOT EXISTS price_history (
         id_history INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -210,7 +259,8 @@ def setupDatabase():
     AFTER INSERT ON price_history
     BEGIN
         UPDATE product 
-        SET current_price = NEW.offer_price 
+        SET current_price = NEW.offer_price,
+            full_price = NEW.full_price
         WHERE id_product = NEW.id_product;
     END;
     ''')
@@ -227,7 +277,7 @@ async def emag_scraper(page, connection, cursor, link="https://www.emag.ro/lapto
         await page.goto(link, timeout=60000, wait_until="domcontentloaded")
         
         # Check for block
-        if "Robot" in await page.title() or await page.locator("text=Verify you are human").count() await page.locator("text=Verif").count() > 0:
+        if "Robot" in await page.title() or await page.locator("text=Verify you are human").count() > 0:
             print("CRITICAL: Blocked by bot protection!")
             return
 
@@ -309,7 +359,8 @@ async def emag_scraper(page, connection, cursor, link="https://www.emag.ro/lapto
                     connection.commit()
                     
                     print(f"New product: {product_title}")
-                    await alert_new(product_title, product_offerprice, product_link, 'EMAG', product_fullprice)
+                    if await should_send_alert(cursor, specs, product_offerprice):
+                        await alert_new(product_title, product_offerprice, product_link, 'EMAG', product_fullprice)
                 else:
                     id_product = product_result[0]
                     cursor.execute("UPDATE product SET last_seen = datetime('now', 'localtime'), active = 1 WHERE id_product = ?", (id_product,))
@@ -320,6 +371,8 @@ async def emag_scraper(page, connection, cursor, link="https://www.emag.ro/lapto
                     if latest_price is None or latest_price[0] != product_offerprice or latest_price[1] != product_fullprice:
                         cursor.execute("INSERT INTO price_history (id_product, full_price, offer_price, is_sale) VALUES (?, ?, ?, ?)", (id_product, product_fullprice, product_offerprice, is_sale))
                         print(f"Price update for: {product_title}")
+                        if await should_send_alert(cursor, specs, product_offerprice):
+                            await alert_new(f"UPDATE PRET: {product_title}", product_offerprice, product_link, 'EMAG', product_fullprice)
                         
                     connection.commit()
             except Exception as e:
@@ -419,6 +472,9 @@ async def get_emag_sealed(page, connection, cursor, link="https://www.emag.ro/la
                         
                         cursor.execute("INSERT INTO price_history (id_product, full_price, offer_price, is_sale) VALUES (?, ?, ?, ?)", (id_product, product_fullprice, product_offerprice, is_sale))
                         connection.commit()
+                        
+                        if await should_send_alert(cursor, specs, product_offerprice):
+                            await alert_new(product_title, product_offerprice, product_link, "EMAG", product_fullprice)
                     else:
                         id_product = product_result[0]
                         cursor.execute("UPDATE product SET active = ?, last_seen = datetime('now', 'localtime') WHERE id_product = ?", (active, id_product))
@@ -428,6 +484,8 @@ async def get_emag_sealed(page, connection, cursor, link="https://www.emag.ro/la
                         
                         if latest_price is None or latest_price[0] != product_offerprice or latest_price[1] != product_fullprice:
                             cursor.execute("INSERT INTO price_history (id_product, full_price, offer_price, is_sale) VALUES (?, ?, ?, ?)", (id_product, product_fullprice, product_offerprice, is_sale))
+                            if await should_send_alert(cursor, specs, product_offerprice):
+                                await alert_new(f"UPDATE PRET: {product_title}", product_offerprice, product_link, "EMAG", product_fullprice)
                             
                         connection.commit()
                 except Exception as e:

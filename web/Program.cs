@@ -11,7 +11,7 @@ app.UseStaticFiles();  // Serves files from the wwwroot folder
 
 string dbPath = "Data Source=/data/macbooks.db";
 
-// Endpoint 1: Get Products with Filters (Updated for Lifetime & Condition)
+// Endpoint 1: Get Products with Filters (Updated for Biggest Offers)
 app.MapGet("/api/products", (
     string? search, 
     decimal? minPrice, 
@@ -23,19 +23,19 @@ app.MapGet("/api/products", (
     string? type,
     string? status,     // "active", "inactive", or "all"
     string? condition,  // "sealed", "unsealed", or "all"
-    string? category    // "Laptop", "Tablet", or null/all
+    string? category,   // "Laptop", "Tablet", or null/all
+    string? sortBy      // "price_asc", "price_desc", "offer_desc"
     ) =>
 {
     var products = new List<object>();
     using var connection = new SqliteConnection(dbPath);
     connection.Open();
 
-    // Added 1=1 as a dummy true statement so we can easily append "AND" clauses
-    // Added p.active, p.sealed, and p.last_seen to the SELECT clause
     var query = @"
         SELECT p.id_product, m.title, p.current_price, p.platform, p.link, 
                m.ram, m.storage, m.cpu, p.active, p.sealed, p.last_seen,
-               m.category, m.connectivity
+               m.category, m.connectivity, p.full_price,
+               (COALESCE(p.full_price, p.current_price) - p.current_price) as offer_amount
         FROM product p 
         JOIN model m ON p.id_model = m.id_model 
         WHERE 1=1 "; 
@@ -58,7 +58,9 @@ app.MapGet("/api/products", (
     if (exactStorage.HasValue) query += " AND m.storage = @exactStorage ";
     if (!string.IsNullOrEmpty(type)) query += " AND m.type = @type ";
     
-    query += " ORDER BY p.current_price ASC";
+    if (sortBy == "offer_desc") query += " ORDER BY offer_amount DESC";
+    else if (sortBy == "price_desc") query += " ORDER BY p.current_price DESC";
+    else query += " ORDER BY p.current_price ASC";
 
     using var command = new SqliteCommand(query, connection);
     
@@ -88,6 +90,8 @@ app.MapGet("/api/products", (
             Id = reader.GetInt32(0),
             Title = reader.GetString(1),
             Price = reader.IsDBNull(2) ? 0 : reader.GetDecimal(2),
+            FullPrice = reader.IsDBNull(13) ? 0 : reader.GetDecimal(13),
+            OfferAmount = reader.GetDecimal(14),
             Platform = reader.GetString(3),
             Link = reader.GetString(4),
             Specs = specs,
@@ -100,6 +104,55 @@ app.MapGet("/api/products", (
     }
     return Results.Ok(products);
 });
+
+// Endpoint 3: Notifications
+app.MapGet("/api/notifications", () => {
+    var filters = new List<object>();
+    using var connection = new SqliteConnection(dbPath);
+    connection.Open();
+    using var cmd = new SqliteCommand("SELECT * FROM notification_filter", connection);
+    using var reader = cmd.ExecuteReader();
+    while (reader.Read()) {
+        filters.Add(new {
+            Id = reader.GetInt32(0),
+            Category = reader.IsDBNull(1) ? null : reader.GetString(1),
+            Type = reader.IsDBNull(2) ? null : reader.GetString(2),
+            MinRam = reader.IsDBNull(3) ? null : (int?)reader.GetInt32(3),
+            MinStorage = reader.IsDBNull(4) ? null : (int?)reader.GetInt32(4),
+            MaxPrice = reader.IsDBNull(5) ? null : (decimal?)reader.GetDecimal(5),
+            Condition = reader.IsDBNull(6) ? null : reader.GetString(6),
+            Active = reader.GetInt32(7) == 1
+        });
+    }
+    return Results.Ok(filters);
+});
+
+app.MapPost("/api/notifications", (NotificationRule rule) => {
+    using var connection = new SqliteConnection(dbPath);
+    connection.Open();
+    var query = @"INSERT INTO notification_filter (category, type, min_ram, min_storage, max_price, condition) 
+                  VALUES (@category, @type, @minRam, @minStorage, @maxPrice, @condition)";
+    using var cmd = new SqliteCommand(query, connection);
+    cmd.Parameters.AddWithValue("@category", rule.Category ?? (object)DBNull.Value);
+    cmd.Parameters.AddWithValue("@type", rule.Type ?? (object)DBNull.Value);
+    cmd.Parameters.AddWithValue("@minRam", rule.MinRam ?? (object)DBNull.Value);
+    cmd.Parameters.AddWithValue("@minStorage", rule.MinStorage ?? (object)DBNull.Value);
+    cmd.Parameters.AddWithValue("@maxPrice", rule.MaxPrice ?? (object)DBNull.Value);
+    cmd.Parameters.AddWithValue("@condition", rule.Condition ?? (object)DBNull.Value);
+    cmd.ExecuteNonQuery();
+    return Results.Ok();
+});
+
+app.MapDelete("/api/notifications/{id}", (int id) => {
+    using var connection = new SqliteConnection(dbPath);
+    connection.Open();
+    using var cmd = new SqliteCommand("DELETE FROM notification_filter WHERE id_filter = @id", connection);
+    cmd.Parameters.AddWithValue("@id", id);
+    cmd.ExecuteNonQuery();
+    return Results.Ok();
+});
+
+public record NotificationRule(string? Category, string? Type, int? MinRam, int? MinStorage, decimal? MaxPrice, string? Condition);
 
 // Endpoint 2: Get Price History (Smart branching for Sealed vs Unsealed)
 app.MapGet("/api/products/{id}/history", (int id) =>

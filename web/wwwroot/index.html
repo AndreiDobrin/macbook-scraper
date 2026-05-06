@@ -6,16 +6,23 @@
     <title>Apple Tracker Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <style>
         .product-card { cursor: pointer; transition: transform 0.2s; }
         .product-card:hover { transform: scale(1.02); border-color: #0d6efd; }
-        .inactive-card { opacity: 0.7; } /* Makes sold out items look slightly faded */
+        .inactive-card { opacity: 0.7; }
+        .offer-badge { font-size: 0.8rem; font-weight: bold; padding: 4px 8px; border-radius: 4px; background-color: #ffd700; color: #000; }
     </style>
 </head>
 <body class="bg-light">
 
 <div class="container py-4">
-    <h1 class="mb-4">🍎 Apple Tracker Dashboard</h1>
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>🍎 Apple Tracker Dashboard</h1>
+        <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#notificationModal" onclick="loadNotificationRules()">
+            🔔 Notification Rules
+        </button>
+    </div>
 
     <div class="row g-2 mb-2 p-3 bg-white rounded-top shadow-sm border-bottom">
         <div class="col-md-2">
@@ -53,11 +60,12 @@
                 <option value="unsealed">Resigilat</option>
             </select>
         </div>
-        <div class="col-md-1">
-            <input type="number" id="minPrice" class="form-control" placeholder="Min">
-        </div>
-        <div class="col-md-1">
-            <input type="number" id="maxPrice" class="form-control" placeholder="Max">
+        <div class="col-md-2">
+            <select id="sortFilter" class="form-select">
+                <option value="price_asc">Price: Low to High</option>
+                <option value="price_desc">Price: High to Low</option>
+                <option value="offer_desc">Biggest Offers</option>
+            </select>
         </div>
     </div>
 
@@ -115,66 +123,101 @@
             </div>
         </div>
     </div>
+</div>
 
+<!-- Notification Modal -->
+<div class="modal fade" id="notificationModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">🔔 Telegram Notification Rules</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div class="p-3 border rounded mb-3 bg-light">
+                    <h6>Add New Rule</h6>
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <select id="ruleCategory" class="form-select">
+                                <option value="">Category: All</option>
+                                <option value="Laptop">Laptop</option>
+                                <option value="Tablet">Tablet</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <input type="text" id="ruleType" class="form-control" placeholder="Type (e.g. MacBook Pro)">
+                        </div>
+                        <div class="col-md-4">
+                            <select id="ruleCondition" class="form-select">
+                                <option value="all">Condition: Any</option>
+                                <option value="sealed">Sealed Only</option>
+                                <option value="unsealed">Resigilat Only</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <input type="number" id="ruleMinRam" class="form-control" placeholder="Min RAM (GB)">
+                        </div>
+                        <div class="col-md-4">
+                            <input type="number" id="ruleMinStorage" class="form-control" placeholder="Min Storage (GB)">
+                        </div>
+                        <div class="col-md-4">
+                            <input type="number" id="ruleMaxPrice" class="form-control" placeholder="Max Price (RON)">
+                        </div>
+                        <div class="col-md-12">
+                            <button class="btn btn-success w-100" onclick="addNotificationRule()">Add Rule</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="ruleList">
+                    <!-- Rules loaded here -->
+                </div>
+            </div>
+        </div>
+    </div>
 </div>
 
 <script>
     let currentChart = null;
 
-    // Load products when page loads
     document.addEventListener("DOMContentLoaded", loadProducts);
 
     async function loadProducts() {
         const search = document.getElementById('searchInput').value;
-        const minPrice = document.getElementById('minPrice').value;
-        const maxPrice = document.getElementById('maxPrice').value;
         const category = document.getElementById('categoryFilter').value;
         const type = document.getElementById('typeFilter').value;
         const status = document.getElementById('statusFilter').value;
         const condition = document.getElementById('conditionFilter').value;
-        
-        const ramOp = document.getElementById('ramOperator').value;
+        const sort = document.getElementById('sortFilter').value;
         const ramVal = document.getElementById('ramValue').value;
-        
-        const storageOp = document.getElementById('storageOperator').value;
         const storageVal = document.getElementById('storageValue').value;
 
         let url = new URL('/api/products', window.location.origin);
-        
         if (search) url.searchParams.append('search', search);
-        if (minPrice) url.searchParams.append('minPrice', minPrice);
-        if (maxPrice) url.searchParams.append('maxPrice', maxPrice);
         if (category) url.searchParams.append('category', category);
         if (type) url.searchParams.append('type', type);
         if (status) url.searchParams.append('status', status);
         if (condition) url.searchParams.append('condition', condition);
+        if (sort) url.searchParams.append('sortBy', sort);
         
         if (ramVal) {
-            if (ramOp === 'gte') url.searchParams.append('minRam', ramVal);
-            if (ramOp === 'eq') url.searchParams.append('exactRam', ramVal);
+            const op = document.getElementById('ramOperator').value;
+            url.searchParams.append(op === 'gte' ? 'minRam' : 'exactRam', ramVal);
         }
-        
         if (storageVal) {
-            if (storageOp === 'gte') url.searchParams.append('minStorage', storageVal);
-            if (storageOp === 'eq') url.searchParams.append('exactStorage', storageVal);
+            const op = document.getElementById('storageOperator').value;
+            url.searchParams.append(op === 'gte' ? 'minStorage' : 'exactStorage', storageVal);
         }
 
         const response = await fetch(url);
         const products = await response.json();
-        
         const listContainer = document.getElementById('productList');
         listContainer.innerHTML = '';
 
-        if (products.length === 0) {
-            listContainer.innerHTML = '<div class="alert alert-warning">No devices found matching your criteria.</div>';
-            return;
-        }
-
         products.forEach(p => {
-            // Dynamic styling based on database flags
             const cardClass = p.active ? 'product-card' : 'product-card inactive-card bg-light';
             const statusBadge = p.active ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-danger">Sold Out</span>';
             const conditionBadge = p.sealed ? '<span class="badge bg-info text-dark">New/Sealed</span>' : '<span class="badge bg-warning text-dark">Resigilat</span>';
+            const offerBadge = p.offerAmount > 0 ? `<span class="offer-badge ms-2">-${Math.round(p.offerAmount)} RON</span>` : '';
             const dateStr = new Date(p.lastSeen.replace(" ", "T")).toLocaleDateString();
 
             const card = document.createElement('div');
@@ -184,7 +227,10 @@
                 <div class="card-body">
                     <div class="d-flex justify-content-between align-items-start mb-2">
                         <h5 class="card-title mb-0 pe-2">${p.title}</h5>
-                        <h5 class="mb-0 text-primary text-nowrap">${p.price} RON</h5>
+                        <div class="text-end">
+                            <h5 class="mb-0 text-primary text-nowrap">${p.price} RON</h5>
+                            ${offerBadge}
+                        </div>
                     </div>
                     <div class="mb-2">
                         ${statusBadge} ${conditionBadge} <span class="badge bg-secondary">${p.platform}</span>
@@ -202,27 +248,69 @@
         });
     }
 
-async function loadHistory(id, title) {
+    async function loadNotificationRules() {
+        const response = await fetch('/api/notifications');
+        const rules = await response.json();
+        const container = document.getElementById('ruleList');
+        container.innerHTML = '<h6>Existing Rules</h6>';
+        
+        if (rules.length === 0) {
+            container.innerHTML += '<p class="text-muted small">No rules yet. You will receive all notifications.</p>';
+        }
+
+        rules.forEach(r => {
+            const div = document.createElement('div');
+            div.className = 'd-flex justify-content-between align-items-center p-2 mb-2 border rounded bg-white';
+            div.innerHTML = `
+                <div>
+                    <strong>${r.category || 'All'} ${r.type || ''}</strong> 
+                    <small class="text-muted">
+                        (${r.condition || 'all'}, RAM: &ge;${r.minRam || 0}, Storage: &ge;${r.minStorage || 0}, Max: ${r.maxPrice || 'Any'} RON)
+                    </small>
+                </div>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteRule(${r.id})">Delete</button>
+            `;
+            container.appendChild(div);
+        });
+    }
+
+    async function addNotificationRule() {
+        const rule = {
+            Category: document.getElementById('ruleCategory').value || null,
+            Type: document.getElementById('ruleType').value || null,
+            Condition: document.getElementById('ruleCondition').value,
+            MinRam: parseInt(document.getElementById('ruleMinRam').value) || null,
+            MinStorage: parseInt(document.getElementById('ruleMinStorage').value) || null,
+            MaxPrice: parseFloat(document.getElementById('ruleMaxPrice').value) || null
+        };
+
+        await fetch('/api/notifications', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(rule)
+        });
+        loadNotificationRules();
+    }
+
+    async function deleteRule(id) {
+        await fetch(`/api/notifications/${id}`, { method: 'DELETE' });
+        loadNotificationRules();
+    }
+
+    async function loadHistory(id, title) {
         const response = await fetch(`/api/products/${id}/history`);
         const result = await response.json();
-        
         const history = result.history;
         const isSealed = result.isSealed;
 
-        // Change the chart title based on what data we are looking at
-        if (isSealed) {
-            document.getElementById('chartTitle').innerHTML = `<span class="badge bg-info text-dark mb-2">New/Sealed</span><br>${title}`;
-        } else {
-            document.getElementById('chartTitle').innerHTML = `<span class="badge bg-warning text-dark mb-2">Resigilat Market Trend</span><br><small class="text-muted">Lowest daily price for this model</small><br>${title}`;
-        }
+        document.getElementById('chartTitle').innerHTML = isSealed 
+            ? `<span class="badge bg-info text-dark mb-2">New/Sealed</span><br>${title}`
+            : `<span class="badge bg-warning text-dark mb-2">Resigilat Market Trend</span><br><small class="text-muted">Lowest daily price for this model</small><br>${title}`;
 
         const labels = history.map(h => new Date(h.date).toLocaleDateString());
         const data = history.map(h => h.price);
 
-        if (currentChart) {
-            currentChart.destroy();
-        }
-
+        if (currentChart) currentChart.destroy();
         const ctx = document.getElementById('priceChart').getContext('2d');
         currentChart = new Chart(ctx, {
             type: 'line',
@@ -231,21 +319,17 @@ async function loadHistory(id, title) {
                 datasets: [{
                     label: isSealed ? 'Listing Price (RON)' : 'Best Market Price (RON)',
                     data: data,
-                    // Use a slightly different color to visually separate sealed vs unsealed trends
                     borderColor: isSealed ? 'rgb(13, 202, 253)' : 'rgb(255, 193, 7)', 
                     backgroundColor: isSealed ? 'rgba(13, 202, 253, 0.1)' : 'rgba(255, 193, 7, 0.1)',
                     borderWidth: 2,
                     fill: true,
-                    // Stepped looks great for specific products, smooth looks better for market trends
                     stepped: isSealed, 
                     tension: isSealed ? 0 : 0.2 
                 }]
             },
             options: {
                 responsive: true,
-                scales: {
-                    y: { beginAtZero: false }
-                }
+                scales: { y: { beginAtZero: false } }
             }
         });
     }
