@@ -35,10 +35,11 @@ app.MapGet("/api/products", (
         SELECT p.id_product, m.title, p.current_price, p.platform, p.link, 
                m.ram, m.storage, m.cpu, p.active, p.sealed, p.last_seen,
                m.category, m.connectivity, p.full_price,
-               (COALESCE(p.full_price, p.current_price) - p.current_price) as offer_amount
+               (COALESCE(p.full_price, p.current_price) - p.current_price) as offer_amount,
+               m.type
         FROM product p 
         JOIN model m ON p.id_model = m.id_model 
-        WHERE 1=1 "; 
+        WHERE 1=1 ";
 
     // Status Filter
     if (status == "active") query += " AND p.active = 1 ";
@@ -79,22 +80,26 @@ app.MapGet("/api/products", (
     {
         string categoryVal = reader.GetString(11);
         string connectivityVal = reader.GetString(12);
-        string specs;
+        string typeVal = reader.IsDBNull(15) ? "Device" : reader.GetString(15);
+        
+        string cleanTitle;
+        string originalTitle = reader.GetString(1);
+
         if (categoryVal == "Tablet") {
-             specs = $"{reader.GetString(7)} | {connectivityVal} | {reader.GetInt32(6)}GB";
+             cleanTitle = $"{typeVal} ({reader.GetString(7)}) - {reader.GetInt32(6)}GB {connectivityVal}";
         } else {
-             specs = $"{reader.GetString(7)} | {reader.GetInt32(5)}GB RAM | {reader.GetInt32(6)}GB SSD";
+             cleanTitle = $"{typeVal} ({reader.GetString(7)}) - {reader.GetInt32(5)}GB RAM / {reader.GetInt32(6)}GB SSD";
         }
 
         products.Add(new {
             Id = reader.GetInt32(0),
-            Title = reader.GetString(1),
+            Title = originalTitle,
             Price = reader.IsDBNull(2) ? 0 : reader.GetDecimal(2),
             FullPrice = reader.IsDBNull(13) ? 0 : reader.GetDecimal(13),
             OfferAmount = reader.GetDecimal(14),
             Platform = reader.GetString(3),
             Link = reader.GetString(4),
-            Specs = specs,
+            Specs = cleanTitle,
             Active = reader.GetInt32(8) == 1,
             Sealed = reader.GetInt32(9) == 1,
             LastSeen = reader.GetString(10),
@@ -238,10 +243,10 @@ app.MapGet("/api/trends", () => {
     var trends = new List<object>();
     while (reader.Read()) {
         trends.Add(new {
-            Date = reader.GetString(0),
+            Date = reader.IsDBNull(0) ? "Unknown" : reader.GetString(0),
             Category = reader.IsDBNull(1) ? "Unknown" : reader.GetString(1),
-            MinPrice = reader.GetDecimal(2),
-            AvgPrice = Math.Round(reader.GetDecimal(3), 2)
+            MinPrice = reader.GetDouble(2),
+            AvgPrice = Math.Round(reader.GetDouble(3), 2)
         });
     }
     return Results.Ok(trends);

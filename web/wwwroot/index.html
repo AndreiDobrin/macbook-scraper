@@ -694,10 +694,11 @@
             const res = await fetch('/api/trends');
             const data = await res.json();
             
-            // Render MacBook trends
-            if(data.Laptop) renderTrendChart('macbookTrendChart', data.Laptop, '59, 130, 246');
-            // Render iPad trends
-            if(data.Tablet) renderTrendChart('ipadTrendChart', data.Tablet, '16, 185, 129');
+            const laptops = data.filter(d => d.category === 'Laptop');
+            const tablets = data.filter(d => d.category === 'Tablet');
+
+            if(laptops.length > 0) renderTrendChart('macbookTrendChart', laptops, '59, 130, 246');
+            if(tablets.length > 0) renderTrendChart('ipadTrendChart', tablets, '16, 185, 129');
         } catch(e) {
             console.error(e);
         }
