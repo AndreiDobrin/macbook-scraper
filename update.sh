@@ -24,8 +24,8 @@ if [ "$LOCAL" != "$REMOTE" ]; then
 
     echo "$(date): Rebuilding docker containers..."
     # Rebuild and restart the containers to apply the new code
-    docker-compose down
-    docker-compose up -d --build
+    docker compose down
+    docker compose up -d --build
     
     echo "$(date): Update applied successfully."
 else
