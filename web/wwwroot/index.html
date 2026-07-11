@@ -3,41 +3,420 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Apple Tracker Dashboard</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <title>Apple Tracker</title>
+    <!-- Modern Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <style>
-        .product-card { cursor: pointer; transition: transform 0.2s; }
-        .product-card:hover { transform: scale(1.02); border-color: #0d6efd; }
-        .inactive-card { opacity: 0.7; }
-        .offer-badge { font-size: 0.8rem; font-weight: bold; padding: 4px 8px; border-radius: 4px; background-color: #ffd700; color: #000; }
+        :root {
+            --bg-color: #0f172a;
+            --surface: rgba(30, 41, 59, 0.7);
+            --surface-hover: rgba(51, 65, 85, 0.8);
+            --border: rgba(255, 255, 255, 0.1);
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --primary: #3b82f6;
+            --primary-hover: #2563eb;
+            --accent: #10b981;
+            --danger: #ef4444;
+            --warning: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-color);
+            background-image: radial-gradient(circle at 15% 50%, rgba(59, 130, 246, 0.15), transparent 25%),
+                              radial-gradient(circle at 85% 30%, rgba(16, 185, 129, 0.15), transparent 25%);
+            color: var(--text-main);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* Nav and Header */
+        header {
+            padding: 2rem 5%;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
+            backdrop-filter: blur(10px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            background: linear-gradient(to right, #60a5fa, #34d399);
+            -webkit-background-clip: text;
+            color: transparent;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 0.6rem 1.2rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 500;
+            transition: all 0.3s ease;
+            backdrop-filter: blur(5px);
+        }
+
+        .btn:hover {
+            background: var(--surface-hover);
+            transform: translateY(-1px);
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            border: none;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: var(--primary-hover);
+        }
+
+        /* Tabs */
+        .tabs {
+            display: flex;
+            gap: 1rem;
+            padding: 2rem 5% 0;
+        }
+
+        .tab {
+            padding: 0.8rem 1.5rem;
+            cursor: pointer;
+            border-bottom: 2px solid transparent;
+            color: var(--text-muted);
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .tab.active {
+            color: var(--text-main);
+            border-bottom-color: var(--primary);
+        }
+
+        .tab-content {
+            display: none;
+            padding: 2rem 5%;
+        }
+
+        .tab-content.active {
+            display: block;
+            animation: fadeIn 0.4s ease forwards;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        /* Filters */
+        .filters-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 1rem;
+            background: var(--surface);
+            padding: 1.5rem;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            margin-bottom: 2rem;
+            backdrop-filter: blur(10px);
+        }
+
+        .filter-group {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+        }
+
+        .filter-group label {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        select, input {
+            background: rgba(15, 23, 42, 0.6);
+            border: 1px solid var(--border);
+            color: var(--text-main);
+            padding: 0.6rem;
+            border-radius: 6px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        select:focus, input:focus {
+            border-color: var(--primary);
+        }
+
+        /* Dashboard Grid */
+        .dashboard {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 2rem;
+        }
+
+        @media (max-width: 900px) {
+            .dashboard { grid-template-columns: 1fr; }
+        }
+
+        /* Product Cards */
+        .product-list {
+            height: 70vh;
+            overflow-y: auto;
+            padding-right: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--surface-hover); border-radius: 4px; }
+
+        .card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 1.5rem;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            backdrop-filter: blur(10px);
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(45deg, transparent, rgba(255,255,255,0.03), transparent);
+            transform: translateX(-100%);
+            transition: transform 0.6s;
+        }
+
+        .card:hover::before {
+            transform: translateX(100%);
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            border-color: rgba(59, 130, 246, 0.5);
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.5);
+        }
+
+        .card.inactive {
+            opacity: 0.6;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 1rem;
+        }
+
+        .card-title {
+            font-size: 1.1rem;
+            font-weight: 600;
+            line-height: 1.4;
+            max-width: 70%;
+        }
+
+        .price-tag {
+            text-align: right;
+        }
+
+        .price {
+            font-size: 1.25rem;
+            font-weight: 700;
+            color: #60a5fa;
+        }
+
+        .offer-badge {
+            display: inline-block;
+            background: var(--warning);
+            color: #000;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 0.2rem 0.5rem;
+            border-radius: 4px;
+            margin-top: 0.3rem;
+        }
+
+        .badges {
+            display: flex;
+            gap: 0.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .badge {
+            font-size: 0.7rem;
+            padding: 0.3rem 0.6rem;
+            border-radius: 20px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge.active { background: rgba(16, 185, 129, 0.2); color: #34d399; }
+        .badge.inactive { background: rgba(239, 68, 68, 0.2); color: #f87171; }
+        .badge.sealed { background: rgba(59, 130, 246, 0.2); color: #60a5fa; }
+        .badge.unsealed { background: rgba(245, 158, 11, 0.2); color: #fbbf24; }
+        .badge.platform { background: rgba(255, 255, 255, 0.1); color: var(--text-main); }
+
+        .specs {
+            color: var(--text-muted);
+            font-size: 0.9rem;
+            margin-bottom: 1rem;
+            line-height: 1.5;
+        }
+
+        .card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid var(--border);
+            padding-top: 1rem;
+            margin-top: auto;
+        }
+
+        .last-seen {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        /* Chart Area */
+        .chart-container {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            position: sticky;
+            top: 100px;
+            backdrop-filter: blur(10px);
+        }
+
+        .chart-title {
+            margin-bottom: 1.5rem;
+            font-weight: 600;
+            color: var(--text-main);
+            font-size: 1.1rem;
+            line-height: 1.4;
+        }
+
+        /* Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(5px);
+            display: none;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .modal-overlay.active { display: flex; }
+
+        .modal {
+            background: var(--bg-color);
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            width: 90%;
+            max-width: 600px;
+            max-height: 90vh;
+            overflow-y: auto;
+            padding: 2rem;
+            box-shadow: 0 25px 50px -12px rgba(0,0,0,0.5);
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 1.5rem;
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            font-size: 1.5rem;
+            cursor: pointer;
+        }
+
+        .close-btn:hover { color: var(--text-main); }
+
+        .rule-item {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid var(--border);
+            padding: 1rem;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 0.5rem;
+        }
+        
+        /* Trends Tab */
+        .trends-container {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 2rem;
+            margin-bottom: 2rem;
+        }
     </style>
 </head>
-<body class="bg-light">
+<body>
 
-<div class="container py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1>🍎 Apple Tracker Dashboard</h1>
-        <button class="btn btn-outline-primary" data-bs-toggle="modal" data-bs-target="#notificationModal" onclick="loadNotificationRules()">
-            🔔 Notification Rules
-        </button>
+<header>
+    <div class="logo">
+        🍎 Apple Tracker
     </div>
+    <button class="btn" onclick="openModal()">🔔 Alerts</button>
+</header>
 
-    <div class="row g-2 mb-2 p-3 bg-white rounded-top shadow-sm border-bottom">
-        <div class="col-md-2">
-            <input type="text" id="searchInput" class="form-control" placeholder="Search...">
+<div class="tabs">
+    <div class="tab active" onclick="switchTab('products')">Product Listings</div>
+    <div class="tab" onclick="switchTab('trends')">Market Trends</div>
+</div>
+
+<div id="products-tab" class="tab-content active">
+    <div class="filters-grid">
+        <div class="filter-group">
+            <label>Search</label>
+            <input type="text" id="searchInput" placeholder="Keywords...">
         </div>
-        <div class="col-md-2">
-            <select id="categoryFilter" class="form-select">
-                <option value="">All Categories</option>
+        <div class="filter-group">
+            <label>Category</label>
+            <select id="categoryFilter">
+                <option value="">All</option>
                 <option value="Laptop">MacBooks</option>
                 <option value="Tablet">iPads</option>
             </select>
         </div>
-        <div class="col-md-2">
-            <select id="typeFilter" class="form-select">
-                <option value="">All Types</option>
+        <div class="filter-group">
+            <label>Type</label>
+            <select id="typeFilter">
+                <option value="">All</option>
                 <option value="MacBook Pro">MacBook Pro</option>
                 <option value="MacBook Air">MacBook Air</option>
                 <option value="iPad Pro">iPad Pro</option>
@@ -46,38 +425,34 @@
                 <option value="iPad">iPad</option>
             </select>
         </div>
-        <div class="col-md-2">
-            <select id="statusFilter" class="form-select">
-                <option value="active">Active Only</option>
-                <option value="inactive">Sold Out</option>
-                <option value="all">Active & Sold Out</option>
-            </select>
-        </div>
-        <div class="col-md-2">
-            <select id="conditionFilter" class="form-select">
-                <option value="all">Any Condition</option>
+        <div class="filter-group">
+            <label>Condition</label>
+            <select id="conditionFilter">
+                <option value="all">Any</option>
                 <option value="sealed">New / Sealed</option>
                 <option value="unsealed">Resigilat</option>
             </select>
         </div>
-        <div class="col-md-2">
-            <select id="sortFilter" class="form-select">
+        <div class="filter-group">
+            <label>Status</label>
+            <select id="statusFilter">
+                <option value="active">Active Only</option>
+                <option value="inactive">Sold Out</option>
+                <option value="all">All</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>Sort By</label>
+            <select id="sortFilter">
                 <option value="price_asc">Price: Low to High</option>
                 <option value="price_desc">Price: High to Low</option>
                 <option value="offer_desc">Biggest Offers</option>
             </select>
         </div>
-    </div>
-
-    <div class="row g-2 mb-4 p-3 bg-white rounded-bottom shadow-sm">
-        <div class="col-md-5 d-flex align-items-center">
-            <span class="me-2 fw-bold text-muted small text-uppercase">RAM:</span>
-            <select id="ramOperator" class="form-select form-select-sm w-auto me-2">
-                <option value="gte">&ge; (At least)</option>
-                <option value="eq">= (Exact)</option>
-            </select>
-            <select id="ramValue" class="form-select form-select-sm">
-                <option value="">Any RAM</option>
+        <div class="filter-group">
+            <label>Min RAM (GB)</label>
+            <select id="ramValue">
+                <option value="">Any</option>
                 <option value="8">8 GB</option>
                 <option value="16">16 GB</option>
                 <option value="18">18 GB</option>
@@ -86,19 +461,12 @@
                 <option value="36">36 GB</option>
                 <option value="48">48 GB</option>
                 <option value="64">64 GB</option>
-                <option value="96">96 GB</option>
-                <option value="128">128 GB</option>
             </select>
         </div>
-        
-        <div class="col-md-5 d-flex align-items-center">
-            <span class="me-2 fw-bold text-muted small text-uppercase">Storage:</span>
-            <select id="storageOperator" class="form-select form-select-sm w-auto me-2">
-                <option value="gte">&ge; (At least)</option>
-                <option value="eq">= (Exact)</option>
-            </select>
-            <select id="storageValue" class="form-select form-select-sm">
-                <option value="">Any Storage</option>
+        <div class="filter-group">
+            <label>Min Storage (GB)</label>
+            <select id="storageValue">
+                <option value="">Any</option>
                 <option value="64">64 GB</option>
                 <option value="128">128 GB</option>
                 <option value="256">256 GB</option>
@@ -107,79 +475,100 @@
                 <option value="2048">2 TB</option>
             </select>
         </div>
-        <div class="col-md-2">
-            <button class="btn btn-primary w-100" onclick="loadProducts()">Filter Results</button>
+        <div class="filter-group" style="justify-content: flex-end;">
+            <button class="btn btn-primary" onclick="loadProducts()">Apply Filters</button>
         </div>
     </div>
 
-    <div class="row">
-        <div class="col-md-7" style="height: 70vh; overflow-y: auto;" id="productList">
-            </div>
-
-        <div class="col-md-5">
-            <div class="bg-white p-3 rounded shadow-sm sticky-top" style="top: 20px;">
-                <h4 id="chartTitle">Select a device to view history</h4>
+    <div class="dashboard">
+        <div class="product-list" id="productList">
+            <!-- Products injected here -->
+            <div style="color: var(--text-muted); text-align: center; padding: 2rem;">Loading products...</div>
+        </div>
+        <div>
+            <div class="chart-container">
+                <div class="chart-title" id="chartTitle">Select a device to view its price history</div>
                 <canvas id="priceChart"></canvas>
             </div>
         </div>
     </div>
 </div>
 
-<!-- Notification Modal -->
-<div class="modal fade" id="notificationModal" tabindex="-1">
-    <div class="modal-dialog modal-lg">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title">🔔 Telegram Notification Rules</h5>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body">
-                <div class="p-3 border rounded mb-3 bg-light">
-                    <h6>Add New Rule</h6>
-                    <div class="row g-2">
-                        <div class="col-md-4">
-                            <select id="ruleCategory" class="form-select">
-                                <option value="">Category: All</option>
-                                <option value="Laptop">Laptop</option>
-                                <option value="Tablet">Tablet</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <input type="text" id="ruleType" class="form-control" placeholder="Type (e.g. MacBook Pro)">
-                        </div>
-                        <div class="col-md-4">
-                            <select id="ruleCondition" class="form-select">
-                                <option value="all">Condition: Any</option>
-                                <option value="sealed">Sealed Only</option>
-                                <option value="unsealed">Resigilat Only</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4">
-                            <input type="number" id="ruleMinRam" class="form-control" placeholder="Min RAM (GB)">
-                        </div>
-                        <div class="col-md-4">
-                            <input type="number" id="ruleMinStorage" class="form-control" placeholder="Min Storage (GB)">
-                        </div>
-                        <div class="col-md-4">
-                            <input type="number" id="ruleMaxPrice" class="form-control" placeholder="Max Price (RON)">
-                        </div>
-                        <div class="col-md-12">
-                            <button class="btn btn-success w-100" onclick="addNotificationRule()">Add Rule</button>
-                        </div>
-                    </div>
-                </div>
-                <div id="ruleList">
-                    <!-- Rules loaded here -->
-                </div>
-            </div>
+<div id="trends-tab" class="tab-content">
+    <div class="trends-container">
+        <h2 style="margin-bottom: 1rem;">Market Trends: MacBooks</h2>
+        <p style="color: var(--text-muted); margin-bottom: 2rem;">Average listing price over time</p>
+        <div style="height: 400px;">
+            <canvas id="macbookTrendChart"></canvas>
         </div>
+    </div>
+    
+    <div class="trends-container">
+        <h2 style="margin-bottom: 1rem;">Market Trends: iPads</h2>
+        <p style="color: var(--text-muted); margin-bottom: 2rem;">Average listing price over time</p>
+        <div style="height: 400px;">
+            <canvas id="ipadTrendChart"></canvas>
+        </div>
+    </div>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay" onclick="if(event.target===this) closeModal()">
+    <div class="modal">
+        <div class="modal-header">
+            <h2>Notification Rules</h2>
+            <button class="close-btn" onclick="closeModal()">&times;</button>
+        </div>
+        
+        <div style="background: rgba(255,255,255,0.05); padding: 1.5rem; border-radius: 8px; margin-bottom: 1.5rem;">
+            <h4 style="margin-bottom: 1rem;">Add New Rule</h4>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-bottom: 1rem;">
+                <select id="ruleCategory"><option value="">Category: All</option><option value="Laptop">MacBook</option><option value="Tablet">iPad</option></select>
+                <input type="text" id="ruleType" placeholder="Type (e.g. MacBook Pro)">
+                <select id="ruleCondition"><option value="all">Any Condition</option><option value="sealed">New / Sealed</option><option value="unsealed">Resigilat</option></select>
+                <input type="number" id="ruleMinRam" placeholder="Min RAM (GB)">
+                <input type="number" id="ruleMinStorage" placeholder="Min Storage (GB)">
+                <input type="number" id="ruleMaxPrice" placeholder="Max Price (RON)">
+            </div>
+            <button class="btn btn-primary w-100" style="width: 100%" onclick="addRule()">Create Alert</button>
+        </div>
+
+        <div id="ruleList"></div>
     </div>
 </div>
 
 <script>
     let currentChart = null;
+    let macbookChart = null;
+    let ipadChart = null;
 
-    document.addEventListener("DOMContentLoaded", loadProducts);
+    Chart.defaults.color = '#94a3b8';
+    Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.1)';
+
+    document.addEventListener("DOMContentLoaded", () => {
+        loadProducts();
+    });
+
+    function switchTab(tabId) {
+        document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+        
+        event.target.classList.add('active');
+        document.getElementById(tabId + '-tab').classList.add('active');
+
+        if (tabId === 'trends') {
+            loadTrends();
+        }
+    }
+
+    function openModal() {
+        document.getElementById('modalOverlay').classList.add('active');
+        loadRules();
+    }
+    
+    function closeModal() {
+        document.getElementById('modalOverlay').classList.remove('active');
+    }
 
     async function loadProducts() {
         const search = document.getElementById('searchInput').value;
@@ -198,83 +587,188 @@
         if (status) url.searchParams.append('status', status);
         if (condition) url.searchParams.append('condition', condition);
         if (sort) url.searchParams.append('sortBy', sort);
-        
-        if (ramVal) {
-            const op = document.getElementById('ramOperator').value;
-            url.searchParams.append(op === 'gte' ? 'minRam' : 'exactRam', ramVal);
-        }
-        if (storageVal) {
-            const op = document.getElementById('storageOperator').value;
-            url.searchParams.append(op === 'gte' ? 'minStorage' : 'exactStorage', storageVal);
-        }
+        if (ramVal) url.searchParams.append('minRam', ramVal);
+        if (storageVal) url.searchParams.append('minStorage', storageVal);
 
-        const response = await fetch(url);
-        const products = await response.json();
-        const listContainer = document.getElementById('productList');
-        listContainer.innerHTML = '';
+        try {
+            const response = await fetch(url);
+            const products = await response.json();
+            const container = document.getElementById('productList');
+            container.innerHTML = '';
 
-        products.forEach(p => {
-            const cardClass = p.active ? 'product-card' : 'product-card inactive-card bg-light';
-            const statusBadge = p.active ? '<span class="badge bg-success">Active</span>' : '<span class="badge bg-danger">Sold Out</span>';
-            const conditionBadge = p.sealed ? '<span class="badge bg-info text-dark">New/Sealed</span>' : '<span class="badge bg-warning text-dark">Resigilat</span>';
-            const offerBadge = p.offerAmount > 0 ? `<span class="offer-badge ms-2">-${Math.round(p.offerAmount)} RON</span>` : '';
-            const dateStr = new Date(p.lastSeen.replace(" ", "T")).toLocaleDateString();
+            if (products.length === 0) {
+                container.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 2rem;">No products found matching your criteria.</div>';
+                return;
+            }
 
-            const card = document.createElement('div');
-            card.className = `card mb-3 shadow-sm ${cardClass}`;
-            card.onclick = () => loadHistory(p.id, p.title);
-            card.innerHTML = `
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-start mb-2">
-                        <h5 class="card-title mb-0 pe-2">${p.title}</h5>
-                        <div class="text-end">
-                            <h5 class="mb-0 text-primary text-nowrap">${p.price} RON</h5>
-                            ${offerBadge}
+            products.forEach(p => {
+                const card = document.createElement('div');
+                card.className = \`card \${!p.active ? 'inactive' : ''}\`;
+                card.onclick = () => loadHistory(p.id, p.title);
+                
+                const dateStr = new Date(p.lastSeen.replace(" ", "T")).toLocaleDateString();
+                
+                card.innerHTML = \`
+                    <div class="card-header">
+                        <div class="card-title">\${p.title}</div>
+                        <div class="price-tag">
+                            <div class="price">\${p.price} RON</div>
+                            \${p.offerAmount > 0 ? \`<div class="offer-badge">-\${Math.round(p.offerAmount)} RON</div>\` : ''}
                         </div>
                     </div>
-                    <div class="mb-2">
-                        ${statusBadge} ${conditionBadge} <span class="badge bg-secondary">${p.platform}</span>
+                    <div class="badges">
+                        <span class="badge \${p.active ? 'active' : 'inactive'}">\${p.active ? 'Active' : 'Sold Out'}</span>
+                        <span class="badge \${p.sealed ? 'sealed' : 'unsealed'}">\${p.sealed ? 'New / Sealed' : 'Resigilat'}</span>
+                        <span class="badge platform">\${p.platform}</span>
                     </div>
-                    <p class="text-muted small mb-2">${p.specs}</p>
-                    <div class="d-flex justify-content-between align-items-center mt-3 border-top pt-2">
-                        <small class="text-muted">Last seen: ${dateStr}</small>
-                        <a href="${p.link}" target="_blank" class="btn btn-sm ${p.active ? 'btn-outline-primary' : 'btn-outline-secondary disabled'}" onclick="event.stopPropagation()">
-                            ${p.active ? 'View on Store' : 'Link Dead'}
+                    <div class="specs">\${p.specs || 'Specs not fully detailed'}</div>
+                    <div class="card-footer">
+                        <span class="last-seen">Seen: \${dateStr}</span>
+                        <a href="\${p.link}" target="_blank" class="btn \${!p.active ? 'disabled' : ''}" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;" onclick="event.stopPropagation()">
+                            \${p.active ? 'Store Link' : 'Dead Link'}
                         </a>
                     </div>
-                </div>
-            `;
-            listContainer.appendChild(card);
-        });
+                \`;
+                container.appendChild(card);
+            });
+        } catch (e) {
+            console.error(e);
+            document.getElementById('productList').innerHTML = '<div style="color: var(--danger); text-align: center; padding: 2rem;">Error loading products.</div>';
+        }
     }
 
-    async function loadNotificationRules() {
-        const response = await fetch('/api/notifications');
-        const rules = await response.json();
+    async function loadHistory(id, title) {
+        try {
+            const response = await fetch(\`/api/products/\${id}/history\`);
+            const result = await response.json();
+            const history = result.history;
+
+            document.getElementById('chartTitle').innerHTML = \`
+                <span style="color: \${result.isSealed ? 'var(--primary)' : 'var(--warning)'}; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 0.5rem;">
+                    \${result.isSealed ? 'Price History (New)' : 'Best Market Price (Resigilat)'}
+                </span>
+                \${title}
+            \`;
+
+            const labels = history.map(h => new Date(h.date).toLocaleDateString());
+            const data = history.map(h => h.price);
+
+            if (currentChart) currentChart.destroy();
+            const ctx = document.getElementById('priceChart').getContext('2d');
+            
+            const color = result.isSealed ? '59, 130, 246' : '245, 158, 11';
+            
+            currentChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Price (RON)',
+                        data: data,
+                        borderColor: \`rgba(\${color}, 1)\`,
+                        backgroundColor: \`rgba(\${color}, 0.1)\`,
+                        borderWidth: 2,
+                        fill: true,
+                        stepped: result.isSealed,
+                        tension: result.isSealed ? 0 : 0.3,
+                        pointBackgroundColor: \`rgba(\${color}, 1)\`,
+                        pointRadius: 3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { beginAtZero: false, grid: { color: 'rgba(255, 255, 255, 0.05)' } },
+                        x: { grid: { color: 'rgba(255, 255, 255, 0.05)' } }
+                    }
+                }
+            });
+        } catch(e) {
+            console.error(e);
+        }
+    }
+
+    async function loadTrends() {
+        try {
+            const res = await fetch('/api/trends');
+            const data = await res.json();
+            
+            // Render MacBook trends
+            if(data.Laptop) renderTrendChart('macbookTrendChart', data.Laptop, '59, 130, 246');
+            // Render iPad trends
+            if(data.Tablet) renderTrendChart('ipadTrendChart', data.Tablet, '16, 185, 129');
+        } catch(e) {
+            console.error(e);
+        }
+    }
+
+    function renderTrendChart(canvasId, data, color) {
+        const labels = data.map(d => d.date);
+        const avgPrices = data.map(d => d.avgPrice);
+        
+        let chartObj = canvasId === 'macbookTrendChart' ? macbookChart : ipadChart;
+        if (chartObj) chartObj.destroy();
+        
+        const ctx = document.getElementById(canvasId).getContext('2d');
+        const newChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Avg Price (RON)',
+                    data: avgPrices,
+                    borderColor: \`rgba(\${color}, 1)\`,
+                    backgroundColor: \`rgba(\${color}, 0.1)\`,
+                    borderWidth: 3,
+                    fill: true,
+                    tension: 0.3,
+                    pointRadius: 4,
+                    pointBackgroundColor: \`rgba(\${color}, 1)\`
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: false, grid: { color: 'rgba(255, 255, 255, 0.05)' } },
+                    x: { grid: { color: 'rgba(255, 255, 255, 0.05)' } }
+                }
+            }
+        });
+        
+        if (canvasId === 'macbookTrendChart') macbookChart = newChart;
+        else ipadChart = newChart;
+    }
+
+    async function loadRules() {
+        const res = await fetch('/api/notifications');
+        const rules = await res.json();
         const container = document.getElementById('ruleList');
-        container.innerHTML = '<h6>Existing Rules</h6>';
         
         if (rules.length === 0) {
-            container.innerHTML += '<p class="text-muted small">No rules yet. You will receive all notifications.</p>';
+            container.innerHTML = '<div style="color: var(--text-muted); text-align: center; padding: 1rem;">No alerts configured.</div>';
+            return;
         }
 
+        container.innerHTML = '';
         rules.forEach(r => {
-            const div = document.createElement('div');
-            div.className = 'd-flex justify-content-between align-items-center p-2 mb-2 border rounded bg-white';
-            div.innerHTML = `
-                <div>
-                    <strong>${r.category || 'All'} ${r.type || ''}</strong> 
-                    <small class="text-muted">
-                        (${r.condition || 'all'}, RAM: &ge;${r.minRam || 0}, Storage: &ge;${r.minStorage || 0}, Max: ${r.maxPrice || 'Any'} RON)
-                    </small>
+            container.innerHTML += \`
+                <div class="rule-item">
+                    <div>
+                        <div style="font-weight: 600; color: var(--text-main);">\${r.category || 'Any'} \${r.type ? '- ' + r.type : ''}</div>
+                        <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.3rem;">
+                            Cond: \${r.condition || 'Any'} | RAM: &ge;\${r.minRam || 0} | Storage: &ge;\${r.minStorage || 0} | Max: \${r.maxPrice ? r.maxPrice + ' RON' : 'Any'}
+                        </div>
+                    </div>
+                    <button class="btn btn-outline-danger" style="color: var(--danger); border-color: var(--danger); background: transparent; padding: 0.3rem 0.6rem;" onclick="deleteRule(\${r.id})">Delete</button>
                 </div>
-                <button class="btn btn-sm btn-outline-danger" onclick="deleteRule(${r.id})">Delete</button>
-            `;
-            container.appendChild(div);
+            \`;
         });
     }
 
-    async function addNotificationRule() {
+    async function addRule() {
         const rule = {
             Category: document.getElementById('ruleCategory').value || null,
             Type: document.getElementById('ruleType').value || null,
@@ -289,49 +783,12 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(rule)
         });
-        loadNotificationRules();
+        loadRules();
     }
 
     async function deleteRule(id) {
-        await fetch(`/api/notifications/${id}`, { method: 'DELETE' });
-        loadNotificationRules();
-    }
-
-    async function loadHistory(id, title) {
-        const response = await fetch(`/api/products/${id}/history`);
-        const result = await response.json();
-        const history = result.history;
-        const isSealed = result.isSealed;
-
-        document.getElementById('chartTitle').innerHTML = isSealed 
-            ? `<span class="badge bg-info text-dark mb-2">New/Sealed</span><br>${title}`
-            : `<span class="badge bg-warning text-dark mb-2">Resigilat Market Trend</span><br><small class="text-muted">Lowest daily price for this model</small><br>${title}`;
-
-        const labels = history.map(h => new Date(h.date).toLocaleDateString());
-        const data = history.map(h => h.price);
-
-        if (currentChart) currentChart.destroy();
-        const ctx = document.getElementById('priceChart').getContext('2d');
-        currentChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: isSealed ? 'Listing Price (RON)' : 'Best Market Price (RON)',
-                    data: data,
-                    borderColor: isSealed ? 'rgb(13, 202, 253)' : 'rgb(255, 193, 7)', 
-                    backgroundColor: isSealed ? 'rgba(13, 202, 253, 0.1)' : 'rgba(255, 193, 7, 0.1)',
-                    borderWidth: 2,
-                    fill: true,
-                    stepped: isSealed, 
-                    tension: isSealed ? 0 : 0.2 
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: { y: { beginAtZero: false } }
-            }
-        });
+        await fetch(\`/api/notifications/\${id}\`, { method: 'DELETE' });
+        loadRules();
     }
 </script>
 </body>

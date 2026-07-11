@@ -67,9 +67,9 @@ def extract_macbook_specs(title):
 
     if "RESIGILAT" in clean_title:
         specs["sealed"] = 0
-    if "MacBook Air" in clean_title:
+    if re.search(r'\bMacBook Air\b', clean_title, re.IGNORECASE):
         specs["type"] = "MacBook Air"
-    elif "MacBook Pro" in clean_title:
+    elif re.search(r'\bMacBook Pro\b', clean_title, re.IGNORECASE):
         specs["type"] = "MacBook Pro"
 
     size_match = re.search(r'(\d+(\.\d+)?)(?="| -inch|-inch)', clean_title)
@@ -136,13 +136,13 @@ def extract_ipad_specs(title):
     if "RESIGILAT" in clean_title:
         specs["sealed"] = 0
     
-    if "iPad Pro" in clean_title:
+    if re.search(r'\biPad Pro\b', clean_title, re.IGNORECASE):
         specs["type"] = "iPad Pro"
-    elif "iPad Air" in clean_title:
+    elif re.search(r'\biPad Air\b', clean_title, re.IGNORECASE):
         specs["type"] = "iPad Air"
-    elif "iPad mini" in clean_title:
+    elif re.search(r'\biPad mini\b', clean_title, re.IGNORECASE):
         specs["type"] = "iPad mini"
-    elif "iPad" in clean_title:
+    elif re.search(r'\biPad\b', clean_title, re.IGNORECASE):
         specs["type"] = "iPad"
 
     size_match = re.search(r'(\d+(\.\d+)?)(?="|\s*-inch|-inch)', clean_title)
@@ -296,7 +296,9 @@ async def emag_scraper(page, connection, cursor, link="https://www.emag.ro/lapto
                 if await title_elem.count() == 0: continue
                 product_title = await title_elem.inner_text(timeout=5000)
                 
-                if is_ipad and "Apple" not in product_title and "iPad" not in product_title:
+                if is_ipad and not re.search(r'\b(Apple|iPad)\b', product_title, re.IGNORECASE):
+                    continue
+                if not is_ipad and not re.search(r'\b(Apple|MacBook)\b', product_title, re.IGNORECASE):
                     continue
 
                 price_elem = product.locator(".product-new-price")
@@ -411,7 +413,9 @@ async def get_emag_sealed(page, connection, cursor, link="https://www.emag.ro/la
                     if await title_elem.count() == 0: continue
                     product_title = await title_elem.inner_text(timeout=5000)
                     
-                    if is_ipad and "Apple" not in product_title and "iPad" not in product_title:
+                    if is_ipad and not re.search(r'\b(Apple|iPad)\b', product_title, re.IGNORECASE):
+                        continue
+                    if not is_ipad and not re.search(r'\b(Apple|MacBook)\b', product_title, re.IGNORECASE):
                         continue
 
                     specs = extract_ipad_specs(product_title) if is_ipad else extract_macbook_specs(product_title)

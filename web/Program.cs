@@ -217,6 +217,36 @@ app.MapGet("/api/products/{id}/history", (int id) =>
     });
 });
 
+// Endpoint 4: Get Category Trends
+app.MapGet("/api/trends", () => {
+    using var connection = new SqliteConnection(dbPath);
+    connection.Open();
+    var query = @"
+        SELECT date(ph.recorded_at) as day, 
+               m.category, 
+               MIN(ph.offer_price) as min_price, 
+               AVG(ph.offer_price) as avg_price
+        FROM price_history ph
+        JOIN product p ON ph.id_product = p.id_product
+        JOIN model m ON p.id_model = m.id_model
+        GROUP BY day, m.category
+        ORDER BY day ASC";
+    
+    using var command = new SqliteCommand(query, connection);
+    using var reader = command.ExecuteReader();
+    
+    var trends = new List<object>();
+    while (reader.Read()) {
+        trends.Add(new {
+            Date = reader.GetString(0),
+            Category = reader.IsDBNull(1) ? "Unknown" : reader.GetString(1),
+            MinPrice = reader.GetDecimal(2),
+            AvgPrice = Math.Round(reader.GetDecimal(3), 2)
+        });
+    }
+    return Results.Ok(trends);
+});
+
 app.Run();
 
 public record NotificationRule(string? Category, string? Type, int? MinRam, int? MinStorage, decimal? MaxPrice, string? Condition);
