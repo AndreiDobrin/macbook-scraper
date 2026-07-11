@@ -495,6 +495,66 @@
 </div>
 
 <div id="trends-tab" class="tab-content">
+    <div class="filters-grid" id="trendsFilters">
+        <div class="filter-group">
+            <label>Category</label>
+            <select id="trendCategoryFilter">
+                <option value="">All</option>
+                <option value="Laptop">MacBooks</option>
+                <option value="Tablet">iPads</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>Type</label>
+            <select id="trendTypeFilter">
+                <option value="">All</option>
+                <option value="MacBook Pro">MacBook Pro</option>
+                <option value="MacBook Air">MacBook Air</option>
+                <option value="iPad Pro">iPad Pro</option>
+                <option value="iPad Air">iPad Air</option>
+                <option value="iPad mini">iPad mini</option>
+                <option value="iPad">iPad</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>Condition</label>
+            <select id="trendConditionFilter">
+                <option value="all">Any</option>
+                <option value="sealed">New / Sealed</option>
+                <option value="unsealed">Resigilat</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>Min RAM (GB)</label>
+            <select id="trendRamValue">
+                <option value="">Any</option>
+                <option value="8">8 GB</option>
+                <option value="16">16 GB</option>
+                <option value="18">18 GB</option>
+                <option value="24">24 GB</option>
+                <option value="32">32 GB</option>
+                <option value="36">36 GB</option>
+                <option value="48">48 GB</option>
+                <option value="64">64 GB</option>
+            </select>
+        </div>
+        <div class="filter-group">
+            <label>Min Storage (GB)</label>
+            <select id="trendStorageValue">
+                <option value="">Any</option>
+                <option value="64">64 GB</option>
+                <option value="128">128 GB</option>
+                <option value="256">256 GB</option>
+                <option value="512">512 GB</option>
+                <option value="1024">1 TB</option>
+                <option value="2048">2 TB</option>
+            </select>
+        </div>
+        <div class="filter-group" style="justify-content: flex-end;">
+            <button class="btn btn-primary" onclick="loadTrends()">Apply Filters</button>
+        </div>
+    </div>
+
     <div style="display: flex; gap: 1rem; margin-bottom: 2rem;">
         <button class="btn trend-btn btn-primary" onclick="setTrendsTimeframe('all', this)">All Time</button>
         <button class="btn trend-btn" onclick="setTrendsTimeframe('1y', this)">1 Year</button>
@@ -713,8 +773,21 @@
     }
 
     async function loadTrends() {
+        const category = document.getElementById('trendCategoryFilter').value;
+        const type = document.getElementById('trendTypeFilter').value;
+        const condition = document.getElementById('trendConditionFilter').value;
+        const ramVal = document.getElementById('trendRamValue').value;
+        const storageVal = document.getElementById('trendStorageValue').value;
+
+        let url = new URL('/api/trends', window.location.origin);
+        if (category) url.searchParams.append('category', category);
+        if (type) url.searchParams.append('type', type);
+        if (condition && condition !== 'all') url.searchParams.append('condition', condition);
+        if (ramVal) url.searchParams.append('minRam', ramVal);
+        if (storageVal) url.searchParams.append('minStorage', storageVal);
+
         try {
-            const res = await fetch('/api/trends');
+            const res = await fetch(url);
             trendsData = await res.json();
             renderFilteredTrends();
         } catch(e) {

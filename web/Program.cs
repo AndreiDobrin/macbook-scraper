@@ -36,7 +36,7 @@ app.MapGet("/api/products", (
                m.ram, m.storage, m.cpu, p.active, p.sealed, p.last_seen,
                m.category, m.connectivity, p.full_price,
                (COALESCE(p.full_price, p.current_price) - p.current_price) as offer_amount,
-               m.type, m.cpu_cores, m.gpu_cores
+               m.type, m.cpu_cores, m.gpu_cores, m.size, m.nano_texture
         FROM product p 
         JOIN model m ON p.id_model = m.id_model 
         WHERE 1=1 ";
@@ -83,18 +83,22 @@ app.MapGet("/api/products", (
         string typeVal = reader.IsDBNull(15) ? "Device" : reader.GetString(15);
         int cpuCores = reader.IsDBNull(16) ? 0 : reader.GetInt32(16);
         int gpuCores = reader.IsDBNull(17) ? 0 : reader.GetInt32(17);
+        double size = reader.IsDBNull(18) ? 0.0 : reader.GetDouble(18);
+        int nanoTexture = reader.IsDBNull(19) ? 0 : reader.GetInt32(19);
         
         string cleanTitle;
         string originalTitle = reader.GetString(1);
 
         if (categoryVal == "Tablet") {
-             cleanTitle = $"{typeVal} ({reader.GetString(7)}) - {reader.GetInt32(6)}GB {connectivityVal}";
+             string textureInfo = nanoTexture == 1 ? " (Nano-Texture)" : "";
+             cleanTitle = $"{typeVal} {size}\" ({reader.GetString(7)}){textureInfo} - {reader.GetInt32(6)}GB {connectivityVal}";
         } else {
              string coreInfo = "";
              if (cpuCores > 0 && gpuCores > 0) {
                  coreInfo = $" {cpuCores}-Core CPU / {gpuCores}-Core GPU";
              }
-             cleanTitle = $"{typeVal} ({reader.GetString(7)}) - {reader.GetInt32(5)}GB RAM / {reader.GetInt32(6)}GB SSD{coreInfo}";
+             string textureInfo = nanoTexture == 1 ? " (Nano-Texture)" : " (Glossy)";
+             cleanTitle = $"{typeVal} {size}\" ({reader.GetString(7)}){textureInfo} - {reader.GetInt32(5)}GB RAM / {reader.GetInt32(6)}GB SSD{coreInfo}";
         }
 
         products.Add(new {
@@ -229,7 +233,13 @@ app.MapGet("/api/products/{id}/history", (int id) =>
 });
 
 // Endpoint 4: Get Category Trends
-app.MapGet("/api/trends", () => {
+app.MapGet("/api/trends", (
+    int? minRam,
+    int? minStorage,
+    string? type,
+    string? condition,
+    string? category
+) => {
     using var connection = new SqliteConnection(dbPath);
     connection.Open();
     var query = @"
@@ -240,10 +250,26 @@ app.MapGet("/api/trends", () => {
         FROM price_history ph
         JOIN product p ON ph.id_product = p.id_product
         JOIN model m ON p.id_model = m.id_model
+        WHERE 1=1 ";
+
+    if (minRam.HasValue) query += " AND m.ram >= @minRam ";
+    if (minStorage.HasValue) query += " AND m.storage >= @minStorage ";
+    if (!string.IsNullOrEmpty(type)) query += " AND m.type = @type ";
+    if (!string.IsNullOrEmpty(category)) query += " AND m.category = @category ";
+    if (condition == "sealed") query += " AND p.sealed = 1 ";
+    else if (condition == "unsealed") query += " AND p.sealed = 0 ";
+
+    query += @"
         GROUP BY day, m.category
         ORDER BY day ASC";
     
     using var command = new SqliteCommand(query, connection);
+    
+    if (minRam.HasValue) command.Parameters.AddWithValue("@minRam", minRam.Value);
+    if (minStorage.HasValue) command.Parameters.AddWithValue("@minStorage", minStorage.Value);
+    if (!string.IsNullOrEmpty(type)) command.Parameters.AddWithValue("@type", type);
+    if (!string.IsNullOrEmpty(category)) command.Parameters.AddWithValue("@category", category);
+
     using var reader = command.ExecuteReader();
     
     var trends = new List<object>();
