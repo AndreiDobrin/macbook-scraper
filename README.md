@@ -1,6 +1,6 @@
 ## Introduction
 
-This is an automated scraper that fetches sealed and resealed macbooks from (currently) eMag and adds them to a database in order to check their prices. It checks prices every 2 hours.
+This is an automated scraper that fetches sealed and resealed MacBooks and iPads from eMAG and Altex, adding them to a database to monitor prices and trends. It checks prices on a schedule.
 
 <img width="1920" height="1048" alt="image" src="https://github.com/user-attachments/assets/8cd2fe2e-782f-49a2-8855-d8984cc4b7c7" />
 
