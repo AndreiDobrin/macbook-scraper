@@ -603,32 +603,32 @@
 
             products.forEach(p => {
                 const card = document.createElement('div');
-                card.className = \`card \${!p.active ? 'inactive' : ''}\`;
+                card.className = `card ${!p.active ? 'inactive' : ''}`;
                 card.onclick = () => loadHistory(p.id, p.title);
                 
                 const dateStr = new Date(p.lastSeen.replace(" ", "T")).toLocaleDateString();
                 
-                card.innerHTML = \`
+                card.innerHTML = `
                     <div class="card-header">
-                        <div class="card-title">\${p.title}</div>
+                        <div class="card-title">${p.title}</div>
                         <div class="price-tag">
-                            <div class="price">\${p.price} RON</div>
-                            \${p.offerAmount > 0 ? \`<div class="offer-badge">-\${Math.round(p.offerAmount)} RON</div>\` : ''}
+                            <div class="price">${p.price} RON</div>
+                            ${p.offerAmount > 0 ? `<div class="offer-badge">-${Math.round(p.offerAmount)} RON</div>` : ''}
                         </div>
                     </div>
                     <div class="badges">
-                        <span class="badge \${p.active ? 'active' : 'inactive'}">\${p.active ? 'Active' : 'Sold Out'}</span>
-                        <span class="badge \${p.sealed ? 'sealed' : 'unsealed'}">\${p.sealed ? 'New / Sealed' : 'Resigilat'}</span>
-                        <span class="badge platform">\${p.platform}</span>
+                        <span class="badge ${p.active ? 'active' : 'inactive'}">${p.active ? 'Active' : 'Sold Out'}</span>
+                        <span class="badge ${p.sealed ? 'sealed' : 'unsealed'}">${p.sealed ? 'New / Sealed' : 'Resigilat'}</span>
+                        <span class="badge platform">${p.platform}</span>
                     </div>
-                    <div class="specs">\${p.specs || 'Specs not fully detailed'}</div>
+                    <div class="specs">${p.specs || 'Specs not fully detailed'}</div>
                     <div class="card-footer">
-                        <span class="last-seen">Seen: \${dateStr}</span>
-                        <a href="\${p.link}" target="_blank" class="btn \${!p.active ? 'disabled' : ''}" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;" onclick="event.stopPropagation()">
-                            \${p.active ? 'Store Link' : 'Dead Link'}
+                        <span class="last-seen">Seen: ${dateStr}</span>
+                        <a href="${p.link}" target="_blank" class="btn ${!p.active ? 'disabled' : ''}" style="padding: 0.4rem 0.8rem; font-size: 0.85rem;" onclick="event.stopPropagation()">
+                            ${p.active ? 'Store Link' : 'Dead Link'}
                         </a>
                     </div>
-                \`;
+                `;
                 container.appendChild(card);
             });
         } catch (e) {
@@ -639,16 +639,16 @@
 
     async function loadHistory(id, title) {
         try {
-            const response = await fetch(\`/api/products/\${id}/history\`);
+            const response = await fetch(`/api/products/${id}/history`);
             const result = await response.json();
             const history = result.history;
 
-            document.getElementById('chartTitle').innerHTML = \`
-                <span style="color: \${result.isSealed ? 'var(--primary)' : 'var(--warning)'}; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 0.5rem;">
-                    \${result.isSealed ? 'Price History (New)' : 'Best Market Price (Resigilat)'}
+            document.getElementById('chartTitle').innerHTML = `
+                <span style="color: ${result.isSealed ? 'var(--primary)' : 'var(--warning)'}; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; display: block; margin-bottom: 0.5rem;">
+                    ${result.isSealed ? 'Price History (New)' : 'Best Market Price (Resigilat)'}
                 </span>
-                \${title}
-            \`;
+                ${title}
+            `;
 
             const labels = history.map(h => new Date(h.date).toLocaleDateString());
             const data = history.map(h => h.price);
@@ -665,13 +665,13 @@
                     datasets: [{
                         label: 'Price (RON)',
                         data: data,
-                        borderColor: \`rgba(\${color}, 1)\`,
-                        backgroundColor: \`rgba(\${color}, 0.1)\`,
+                        borderColor: `rgba(${color}, 1)`,
+                        backgroundColor: `rgba(${color}, 0.1)`,
                         borderWidth: 2,
                         fill: true,
                         stepped: result.isSealed,
                         tension: result.isSealed ? 0 : 0.3,
-                        pointBackgroundColor: \`rgba(\${color}, 1)\`,
+                        pointBackgroundColor: `rgba(${color}, 1)`,
                         pointRadius: 3
                     }]
                 },
@@ -718,13 +718,13 @@
                 datasets: [{
                     label: 'Avg Price (RON)',
                     data: avgPrices,
-                    borderColor: \`rgba(\${color}, 1)\`,
-                    backgroundColor: \`rgba(\${color}, 0.1)\`,
+                    borderColor: `rgba(${color}, 1)`,
+                    backgroundColor: `rgba(${color}, 0.1)`,
                     borderWidth: 3,
                     fill: true,
                     tension: 0.3,
                     pointRadius: 4,
-                    pointBackgroundColor: \`rgba(\${color}, 1)\`
+                    pointBackgroundColor: `rgba(${color}, 1)`
                 }]
             },
             options: {
@@ -754,17 +754,17 @@
 
         container.innerHTML = '';
         rules.forEach(r => {
-            container.innerHTML += \`
+            container.innerHTML += `
                 <div class="rule-item">
                     <div>
-                        <div style="font-weight: 600; color: var(--text-main);">\${r.category || 'Any'} \${r.type ? '- ' + r.type : ''}</div>
+                        <div style="font-weight: 600; color: var(--text-main);">${r.category || 'Any'} ${r.type ? '- ' + r.type : ''}</div>
                         <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 0.3rem;">
-                            Cond: \${r.condition || 'Any'} | RAM: &ge;\${r.minRam || 0} | Storage: &ge;\${r.minStorage || 0} | Max: \${r.maxPrice ? r.maxPrice + ' RON' : 'Any'}
+                            Cond: ${r.condition || 'Any'} | RAM: &ge;${r.minRam || 0} | Storage: &ge;${r.minStorage || 0} | Max: ${r.maxPrice ? r.maxPrice + ' RON' : 'Any'}
                         </div>
                     </div>
-                    <button class="btn btn-outline-danger" style="color: var(--danger); border-color: var(--danger); background: transparent; padding: 0.3rem 0.6rem;" onclick="deleteRule(\${r.id})">Delete</button>
+                    <button class="btn btn-outline-danger" style="color: var(--danger); border-color: var(--danger); background: transparent; padding: 0.3rem 0.6rem;" onclick="deleteRule(${r.id})">Delete</button>
                 </div>
-            \`;
+            `;
         });
     }
 
@@ -787,7 +787,7 @@
     }
 
     async function deleteRule(id) {
-        await fetch(\`/api/notifications/\${id}\`, { method: 'DELETE' });
+        await fetch(`/api/notifications/${id}`, { method: 'DELETE' });
         loadRules();
     }
 </script>
