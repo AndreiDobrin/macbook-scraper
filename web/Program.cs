@@ -36,7 +36,7 @@ app.MapGet("/api/products", (
                m.ram, m.storage, m.cpu, p.active, p.sealed, p.last_seen,
                m.category, m.connectivity, p.full_price,
                (COALESCE(p.full_price, p.current_price) - p.current_price) as offer_amount,
-               m.type
+               m.type, m.cpu_cores, m.gpu_cores
         FROM product p 
         JOIN model m ON p.id_model = m.id_model 
         WHERE 1=1 ";
@@ -81,6 +81,8 @@ app.MapGet("/api/products", (
         string categoryVal = reader.GetString(11);
         string connectivityVal = reader.GetString(12);
         string typeVal = reader.IsDBNull(15) ? "Device" : reader.GetString(15);
+        int cpuCores = reader.IsDBNull(16) ? 0 : reader.GetInt32(16);
+        int gpuCores = reader.IsDBNull(17) ? 0 : reader.GetInt32(17);
         
         string cleanTitle;
         string originalTitle = reader.GetString(1);
@@ -88,18 +90,22 @@ app.MapGet("/api/products", (
         if (categoryVal == "Tablet") {
              cleanTitle = $"{typeVal} ({reader.GetString(7)}) - {reader.GetInt32(6)}GB {connectivityVal}";
         } else {
-             cleanTitle = $"{typeVal} ({reader.GetString(7)}) - {reader.GetInt32(5)}GB RAM / {reader.GetInt32(6)}GB SSD";
+             string coreInfo = "";
+             if (cpuCores > 0 && gpuCores > 0) {
+                 coreInfo = $" {cpuCores}-Core CPU / {gpuCores}-Core GPU";
+             }
+             cleanTitle = $"{typeVal} ({reader.GetString(7)}) - {reader.GetInt32(5)}GB RAM / {reader.GetInt32(6)}GB SSD{coreInfo}";
         }
 
         products.Add(new {
             Id = reader.GetInt32(0),
-            Title = originalTitle,
+            Title = cleanTitle,
             Price = reader.IsDBNull(2) ? 0 : reader.GetDecimal(2),
             FullPrice = reader.IsDBNull(13) ? 0 : reader.GetDecimal(13),
             OfferAmount = reader.GetDecimal(14),
             Platform = reader.GetString(3),
             Link = reader.GetString(4),
-            Specs = cleanTitle,
+            Specs = originalTitle,
             Active = reader.GetInt32(8) == 1,
             Sealed = reader.GetInt32(9) == 1,
             LastSeen = reader.GetString(10),

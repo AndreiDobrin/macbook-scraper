@@ -495,6 +495,13 @@
 </div>
 
 <div id="trends-tab" class="tab-content">
+    <div style="display: flex; gap: 1rem; margin-bottom: 2rem;">
+        <button class="btn trend-btn btn-primary" onclick="setTrendsTimeframe('all', this)">All Time</button>
+        <button class="btn trend-btn" onclick="setTrendsTimeframe('1y', this)">1 Year</button>
+        <button class="btn trend-btn" onclick="setTrendsTimeframe('6m', this)">6 Months</button>
+        <button class="btn trend-btn" onclick="setTrendsTimeframe('1m', this)">1 Month</button>
+    </div>
+
     <div class="trends-container">
         <h2 style="margin-bottom: 1rem;">Market Trends: MacBooks</h2>
         <p style="color: var(--text-muted); margin-bottom: 2rem;">Average listing price over time</p>
@@ -541,6 +548,8 @@
     let currentChart = null;
     let macbookChart = null;
     let ipadChart = null;
+    let trendsData = [];
+    let currentTrendsTimeframe = 'all';
 
     Chart.defaults.color = '#94a3b8';
     Chart.defaults.borderColor = 'rgba(255, 255, 255, 0.1)';
@@ -689,19 +698,47 @@
         }
     }
 
+    function setTrendsTimeframe(tf, btnElement) {
+        currentTrendsTimeframe = tf;
+        
+        const btns = document.querySelectorAll('.trend-btn');
+        btns.forEach(b => {
+            b.classList.remove('btn-primary');
+        });
+        if (btnElement) {
+            btnElement.classList.add('btn-primary');
+        }
+
+        renderFilteredTrends();
+    }
+
     async function loadTrends() {
         try {
             const res = await fetch('/api/trends');
-            const data = await res.json();
-            
-            const laptops = data.filter(d => d.category === 'Laptop');
-            const tablets = data.filter(d => d.category === 'Tablet');
-
-            if(laptops.length > 0) renderTrendChart('macbookTrendChart', laptops, '59, 130, 246');
-            if(tablets.length > 0) renderTrendChart('ipadTrendChart', tablets, '16, 185, 129');
+            trendsData = await res.json();
+            renderFilteredTrends();
         } catch(e) {
             console.error(e);
         }
+    }
+
+    function renderFilteredTrends() {
+        let filteredData = trendsData;
+        if (currentTrendsTimeframe !== 'all') {
+            const now = new Date();
+            let limitDate = new Date();
+            if (currentTrendsTimeframe === '1m') limitDate.setMonth(now.getMonth() - 1);
+            if (currentTrendsTimeframe === '6m') limitDate.setMonth(now.getMonth() - 6);
+            if (currentTrendsTimeframe === '1y') limitDate.setFullYear(now.getFullYear() - 1);
+            
+            filteredData = trendsData.filter(d => new Date(d.date) >= limitDate);
+        }
+
+        const laptops = filteredData.filter(d => d.category === 'Laptop');
+        const tablets = filteredData.filter(d => d.category === 'Tablet');
+
+        renderTrendChart('macbookTrendChart', laptops, '59, 130, 246');
+        renderTrendChart('ipadTrendChart', tablets, '16, 185, 129');
     }
 
     function renderTrendChart(canvasId, data, color) {
