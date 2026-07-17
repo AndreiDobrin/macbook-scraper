@@ -76,7 +76,7 @@ def extract_macbook_specs(title):
     if size_match:
         specs["size"] = float(size_match.group(1))
 
-    cpu_match = re.search(r'cu procesor (Apple M\w+(?: Pro| Max| Ultra)?)', clean_title, re.IGNORECASE)
+    cpu_match = re.search(r'(?:cu procesor\s+)?(Apple M\d+(?:\s*(?:Pro|Max|Ultra))?)', clean_title, re.IGNORECASE)
     if cpu_match:
         specs["cpu"] = cpu_match.group(1)
 

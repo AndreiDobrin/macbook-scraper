@@ -91,14 +91,22 @@ app.MapGet("/api/products", (
 
         if (categoryVal == "Tablet") {
              string textureInfo = nanoTexture == 1 ? " (Nano-Texture)" : "";
-             cleanTitle = $"{typeVal} {size}\" ({reader.GetString(7)}){textureInfo} - {reader.GetInt32(6)}GB {connectivityVal}";
+             if (typeVal == "N/A" || typeVal == "Device" || reader.GetString(7) == "N/A") {
+                 cleanTitle = originalTitle;
+             } else {
+                 cleanTitle = $"{typeVal} {size}\" ({reader.GetString(7)}){textureInfo} - {reader.GetInt32(6)}GB {connectivityVal}";
+             }
         } else {
              string coreInfo = "";
              if (cpuCores > 0 && gpuCores > 0) {
                  coreInfo = $" {cpuCores}-Core CPU / {gpuCores}-Core GPU";
              }
              string textureInfo = nanoTexture == 1 ? " (Nano-Texture)" : " (Glossy)";
-             cleanTitle = $"{typeVal} {size}\" ({reader.GetString(7)}){textureInfo} - {reader.GetInt32(5)}GB RAM / {reader.GetInt32(6)}GB SSD{coreInfo}";
+             if (typeVal == "N/A" || typeVal == "Device" || reader.GetString(7) == "N/A") {
+                 cleanTitle = originalTitle;
+             } else {
+                 cleanTitle = $"{typeVal} {size}\" ({reader.GetString(7)}){textureInfo} - {reader.GetInt32(5)}GB RAM / {reader.GetInt32(6)}GB SSD{coreInfo}";
+             }
         }
 
         products.Add(new {
