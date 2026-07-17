@@ -166,7 +166,7 @@ async def run_altex_cycle():
                 query = '''
                     SELECT p.platform, m.title, 
                            (SELECT offer_price FROM price_history WHERE id_product = p.id_product ORDER BY recorded_at DESC LIMIT 1), 
-                           p.id_product, m.category, m.type, m.ram, m.storage, p.sealed
+                           p.id_product, m.category, m.type, m.ram, m.storage, p.sealed, p.link
                     FROM product p 
                     JOIN model m ON p.id_model = m.id_model 
                     WHERE p.last_seen < ? AND p.sealed = 0 AND p.active = 1 AND p.platform = 'ALTEX'
@@ -188,8 +188,10 @@ async def run_altex_cycle():
                         'sealed': result[8]
                     }
                     
+                    link = result[9]
+                    
                     if offer_price is not None and await should_send_alert(cursor, specs, offer_price):
-                        await alert_sold(title, offer_price, platform)
+                        await alert_sold(title, offer_price, platform, link)
                         
                     cursor.execute("UPDATE product SET active = 0 WHERE id_product = ?", (id_product, ))
                     

@@ -51,11 +51,11 @@ async def should_send_alert(cursor, specs, price):
         
     return False
 
-async def alert_sold(titlu, pret_oferta, platforma, pret_intreg="Necunoscut"):
+async def alert_sold(titlu, pret_oferta, platforma, link="", pret_intreg="Necunoscut"):
     longer_request = HTTPXRequest(connect_timeout=30, read_timeout=30)
     bot = telegram.Bot(token=telegram_token, request=longer_request)
     async with bot:
-        await bot.send_message(text=f"Produs vandut pe {platforma}\n{titlu}\nPret intreg: {pret_intreg}\nPret oferta: {pret_oferta}", chat_id=chat_token)
+        await bot.send_message(text=f"Produs vandut pe {platforma}\n{titlu}\nPret intreg: {pret_intreg}\nPret oferta: {pret_oferta}\n{link}", chat_id=chat_token)
 
 def extract_macbook_specs(title):
     clean_title = " ".join(title.split())
@@ -515,7 +515,7 @@ async def checkDBlastSeen(cursor, connection, script_start_time):
     query = '''
         SELECT p.platform, m.title, 
                (SELECT offer_price FROM price_history WHERE id_product = p.id_product ORDER BY recorded_at DESC LIMIT 1), 
-               p.id_product, m.category, m.type, m.ram, m.storage, p.sealed
+               p.id_product, m.category, m.type, m.ram, m.storage, p.sealed, p.link
         FROM product p 
         JOIN model m ON p.id_model = m.id_model 
         WHERE p.last_seen < ? AND p.sealed = 0 AND p.active = 1
@@ -537,8 +537,10 @@ async def checkDBlastSeen(cursor, connection, script_start_time):
             'sealed': result[8]
         }
         
+        link = result[9]
+        
         if offer_price is not None and await should_send_alert(cursor, specs, offer_price):
-            await alert_sold(title, offer_price, platform)
+            await alert_sold(title, offer_price, platform, link)
             
         cursor.execute("UPDATE product SET active = 0 WHERE id_product = ?", (id_product, ))
         
